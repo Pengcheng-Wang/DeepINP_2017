@@ -31,7 +31,7 @@ local usrActInd_BryceRevealActOne = 12
 local usrActInd_QuentinRevealActOne = 13
 local usrActInd_end = 14
 
--- Creates a DQN agent
+-- Creates CI8 trace and survey file readers
 function CIFileReader:_init(opt)
     self.traceFilePath = 'data/training-log-corpus.log'  --'data/training-survey-corpus.csv'
     -- Read data from CSV to tensor
@@ -50,7 +50,7 @@ function CIFileReader:_init(opt)
     local curId = ''
     local searchNextAdpPresentQuiz = false
     local talkRobFordQuentinLine = 0
-    local talkCntRobFordQuentin = nil
+    local talkCntRobFordQuentin
 
     local i = 0     -- line number in trace file
     for line in traceFile:lines('*l') do
@@ -70,7 +70,6 @@ function CIFileReader:_init(opt)
             self.talkCntQuentin[curId] = 0
             self.talkCntRobert[curId] = 0
             self.talkCntFord[curId] = 0
-            self.talkCntKim[curId] = 0
         else
             if searchNextAdpPresentQuiz then
                 if i > talkRobFordQuentinLine + 3 then
@@ -105,7 +104,7 @@ function CIFileReader:_init(opt)
             elseif oneLine[2] == 'TALK' and oneLine[5] == 'cur-action-talk-quentin' then
                 print('### talk to quentin', i)
                 if self.talkCntQuentin[curId] == 0 then -- select-prent-quiz will be triggered when talking with Quentin for 1st time
-                    print('###### first talk with quentin')
+                    print('###### first talk with quentin') -- but after talking with Kim
                     searchNextAdpPresentQuiz = true
                 end
                 self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_talkQuentin   -- Talk with Quentin
