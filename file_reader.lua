@@ -31,6 +31,21 @@ local usrActInd_BryceRevealActOne = 12
 local usrActInd_QuentinRevealActOne = 13
 local usrActInd_end = 14
 
+function addToSet(set, key)
+    set[key] = true
+end
+function removeFromSet(set, key)
+    set[key] = nil
+end
+function setContains(set, key)
+    return set[key] ~= nil
+end
+
+local invalid_set = {}
+--addToSet(invalid_set, '100-0025')
+--addToSet(invalid_set, '100-0026')
+local invalid_cnt = 0
+
 -- Creates CI8 trace and survey file readers
 function CIFileReader:_init(opt)
     self.traceFilePath = 'data/training-log-corpus.log'  --'data/training-survey-corpus.csv'
@@ -51,17 +66,26 @@ function CIFileReader:_init(opt)
     local searchNextAdpPresentQuiz = false
     local talkRobFordQuentinLine = 0
     local talkCntRobFordQuentin
+    local searchQuizConfirm = false
+    local quizEarnMoreTestsinLine = 0
+    local id_cnt = 0
+    local tmp_inv_set = {}
 
     local i = 0     -- line number in trace file
     for line in traceFile:lines('*l') do
         i = i + 1
         local oneLine = line:split('|')
-        if curId ~= oneLine[1] then -- new ID observed
-            if searchNextAdpPresentQuiz then
-                print('Error in trace file, line', i, '. searchNextAdpPresentQuiz is true at starting lines')
+        if setContains(invalid_set, oneLine[1]) then
+            print('Invalid id', oneLine[1])
+        elseif curId ~= oneLine[1] then -- new ID observed
+            id_cnt = id_cnt + 1
+            if searchNextAdpPresentQuiz or searchQuizConfirm then
+                print('Error in trace file, line', i,
+                    '. searchNextAdpPresentQuiz or searchQuizConfirm is true at starting line')
                 os.exit()
             end
             curId = oneLine[1]
+            print('@ New stu', curId)
             self.traceData[curId] = {}  -- Assume the first line in each user's trace does not have necessary info
             self.AdpTeresaSymptomAct[curId] = {}
             self.AdpBryceSymptomAct[curId] = {}
@@ -74,8 +98,12 @@ function CIFileReader:_init(opt)
             if searchNextAdpPresentQuiz then
                 if i > talkRobFordQuentinLine + 3 then
                     print('Error in trace file, line', i, '. select-present-quiz should be in 3 rows from the triggering talk')
-                    os.exit()
-                elseif oneLine[2] == 'DIALOG' and string.sub(oneLine[6], 1, 7) == 'Kimwant' then
+                    --os.exit()
+                    searchNextAdpPresentQuiz = false -- This is not correct, only for testing
+                    invalid_cnt = invalid_cnt+1
+                    tmp_inv_set[#tmp_inv_set + 1] = curId
+                elseif oneLine[2] == 'DIALOG' and oneLine[6] and (string.sub(oneLine[6], 1, 7) == 'Kimwant' or
+                        string.sub(oneLine[6], 1, 7) == 'Kim,the') then
                     print('### Delete the talk log on line', talkRobFordQuentinLine)
                     self.traceData[curId][#self.traceData[curId]] = nil     -- delete the most recent record
                     talkCntRobFordQuentin[curId] = talkCntRobFordQuentin[curId] - 1     -- decrease count
@@ -84,6 +112,12 @@ function CIFileReader:_init(opt)
                     self.AdpPresentQuizAct[curId][#self.traceData[curId]] = tonumber(string.sub(oneLine[6], -1, -1))
                     searchNextAdpPresentQuiz = false
                 end
+            elseif searchQuizConfirm then   -- earn-more-tests quiz could be taken or retaken. This is detection of 1st quiz
+                if (i == quizEarnMoreTestsinLine + 1) and oneLine[8] == 'press-yes' then
+                    print('### Quiz', i)
+                    self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_quiz   -- quiz action index
+                end
+                searchQuizConfirm = false
             elseif oneLine[2] == 'LOOKEND' and oneLine[4]:split('-')[1] == 'poster' and tonumber(oneLine[5]:split('-')[2]) > posterReadMinTime then
                 print('#@# poster', i, tonumber(oneLine[5]:split('-')[2]))
                 self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_posterRead   -- poster reading action index
@@ -113,7 +147,7 @@ function CIFileReader:_init(opt)
                 talkRobFordQuentinLine = i
             elseif oneLine[2] == 'TALK' and oneLine[5] == 'cur-action-talk-robert' then
                 print('### talk to robert', i)
-                if self.talkCntRobert[curId] == 0 then -- select-prent-quiz will be triggered when talking with Quentin for 1st time
+                if self.talkCntRobert[curId] == 0 then -- select-prent-quiz will be triggered when talking with Robert for 1st time
                     print('###### first talk with robert')
                     searchNextAdpPresentQuiz = true
                 end
@@ -121,17 +155,40 @@ function CIFileReader:_init(opt)
                 self.talkCntRobert[curId] = self.talkCntRobert[curId] + 1
                 talkCntRobFordQuentin = self.talkCntRobert
                 talkRobFordQuentinLine = i
+            elseif oneLine[2] == 'TALK' and oneLine[5] == 'cur-action-talk-ford' then
+                print('### talk to ford', i)
+                if self.talkCntFord[curId] == 0 then -- select-prent-quiz will be triggered when talking with Ford for 1st time
+                    print('###### first talk with ford')
+                    searchNextAdpPresentQuiz = true
+                end
+                self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_talkFord   -- Talk with Robert
+                self.talkCntFord[curId] = self.talkCntFord[curId] + 1
+                talkCntRobFordQuentin = self.talkCntFord
+                talkRobFordQuentinLine = i
+            elseif oneLine[2] == 'PDAOPEN' and oneLine[4] == 'earn-more-tests' then     -- detect of initial quiz
+                searchQuizConfirm = true
+                quizEarnMoreTestsinLine = i
+            elseif oneLine[2] == 'PDAUSE' and oneLine[8] == 'press-retakequiz' then     -- detect of retaken quiz
+                print('### Quiz-re', i)
+                self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_quiz   -- quiz action index
+            elseif oneLine[2] == 'TESTOBJECT' and oneLine[5] ~= 'noenergy' and
+                    oneLine[4] ~= 'NoObject' and oneLine[4] ~= 'MultipleObjects' then
+                print('### Test-obj', i)
+                self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_testObject   -- test object action index
             end
         end
-        if i == 1500 then
-            break
-        end
+--        if i == 3000 then
+--            break
+--        end
     end
 
-    print('@@@', self.traceData)
-    print('### Teresa adp', self.AdpTeresaSymptomAct)
-    print('### Bryce adp', self.AdpBryceSymptomAct)
-    print('### PresentQ adp', self.AdpPresentQuizAct)
+    print('@@@ invalid', invalid_cnt)
+    print('###', id_cnt)
+    print('!!! inv', tmp_inv_set)
+--    print('@@@', self.traceData)
+--    print('### Teresa adp', self.AdpTeresaSymptomAct)
+--    print('### Bryce adp', self.AdpBryceSymptomAct)
+--    print('### PresentQ adp', self.AdpPresentQuizAct)
 
     traceFile:close()
 end
