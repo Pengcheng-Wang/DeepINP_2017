@@ -10,6 +10,7 @@
 local _ = require 'moses'
 local class = require 'classic'
 require 'classic.torch' -- Enables serialisation
+local TableSet = require 'MyMisc.TableSetMisc'
 
 local CIFileReader = classic.class('CIFileReader')
 
@@ -32,20 +33,12 @@ local usrActInd_QuentinRevealActOne = 13
 local usrActInd_KimLetQuentinRevealActOne = 14
 local usrActInd_end = 15
 
-function addToSet(set, key)
-    set[key] = true
-end
-function removeFromSet(set, key)
-    set[key] = nil
-end
-function setContains(set, key)
-    return set[key] ~= nil
-end
 
 local invalid_set = {}
---addToSet(invalid_set, '100-0025')
---addToSet(invalid_set, '100-0026')
+--TableSet.addToSet(invalid_set, '100-0025')
+--TableSet.addToSet(invalid_set, '100-0026')
 local invalid_cnt = 0
+
 
 -- Creates CI8 trace and survey file readers
 function CIFileReader:_init(opt)
