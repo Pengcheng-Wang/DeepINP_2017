@@ -29,7 +29,7 @@
 local CIFileReader = require 'file_reader'
 local fr = CIFileReader()
 fr:evaluateTraceFile()
-
+fr:evaluateSurveyData()
 
 --print('@@', fr.traceData['100-0028'])
 --print('#', #fr.data)

@@ -202,8 +202,8 @@ function CIFileReader:_init(opt)
 --    print('### End action', i)
     self.traceData[curId][#self.traceData[curId] + 1] = self.usrActInd_end   -- End action for the last user
 
-    print('@@@ invalid', invalid_cnt)
-    print('###', id_cnt)
+    print('Trace invalid', invalid_cnt)
+    print('Trace records number:', id_cnt)
 --    print('!!! inv', tmp_inv_set)
 --    print('@@@', self.traceData)
 --    print('### Teresa adp', self.AdpTeresaSymptomAct)
@@ -212,6 +212,26 @@ function CIFileReader:_init(opt)
 --    print('### SubSheet adp', self.AdpWorksheetLevelAct)
 
     traceFile:close()
+
+    --- Read from survey file
+    self.surveyFilePath = 'data/training-survey-corpus.csv'
+    -- Read data from CSV to tensor
+    local surveyFile = io.open(self.surveyFilePath, 'r')
+    surveyFile:read()  -- The 1st line contains column names
+    self.surveyData = {}
+
+    i = 1   -- line number indicator. The 1st line in survey file contains column names
+    for line in surveyFile:lines('*l') do
+        i = i + 1
+        local oneLine = line:split(',')
+        self.surveyData[oneLine[1]] = {}
+        self.surveyData[oneLine[1]][1] = tonumber(oneLine[3]) - 1   -- gender
+        self.surveyData[oneLine[1]][2] = tonumber(oneLine[4])/5.0   -- game frequency
+        self.surveyData[oneLine[1]][3] = tonumber(oneLine[26])/19.0   -- pre-test score
+        self.surveyData[oneLine[1]][4] = tonumber(oneLine[92])   -- nlg
+    end
+    surveyFile:close()
+
 end
 
 --- Check if all records in trace log file follows the Adaptation triggering rule
@@ -338,6 +358,37 @@ function CIFileReader:evaluateTraceFile()
 
     print('Trace data valid!')
 
+end
+
+--- Check if survey data from survey file matches with trace data, and check if values in
+--- each field are in valid scope
+function CIFileReader:evaluateSurveyData()
+    for userId, _ in pairs(self.traceData) do
+        if self.surveyData[userId] == nil then
+            print('!!! Error. Survey data is nil for user id:', userId)
+            os.exit()
+        elseif self.surveyData[userId][1] ~= 0 and self.surveyData[userId][1] ~= 1 then
+            print('!!! Error. Gender field in survey data is not valid:', userId)   -- gender field
+            os.exit()
+        elseif self.surveyData[userId][2] < 0 or self.surveyData[userId][2] > 1 then
+            print('!!! Error. Game freqency field in survey data is not valid:', userId)
+            os.exit()
+        elseif self.surveyData[userId][3] < 0 or self.surveyData[userId][3] > 1 then
+            print('!!! Error. Pre-test score field in survey data is not valid:', userId)
+            os.exit()
+        elseif self.surveyData[userId][4] < -1 or self.surveyData[userId][4] > 1 then
+            print('!!! Error. NLG field in survey data is not valid:', userId)
+            os.exit()
+        end
+    end
+
+    -- Check if records in survey and trace files have same count
+    if TableSet.countsInSet(self.surveyData) ~= TableSet.countsInSet(self.traceData) then
+        print('!!! Error. Survey and trace file record numbers do not match')
+        os.exit()
+    end
+
+    print('Survey data is valid!')
 end
 
 return CIFileReader
