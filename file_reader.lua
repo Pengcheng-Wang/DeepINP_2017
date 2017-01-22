@@ -29,7 +29,8 @@ local usrActInd_testObject = 10
 local usrActInd_submitWorksheet = 11
 local usrActInd_BryceRevealActOne = 12
 local usrActInd_QuentinRevealActOne = 13
-local usrActInd_end = 14
+local usrActInd_KimLetQuentinRevealActOne = 14
+local usrActInd_end = 15
 
 function addToSet(set, key)
     set[key] = true
@@ -58,6 +59,7 @@ function CIFileReader:_init(opt)
     self.AdpBryceSymptomAct = {}
     self.AdpPresentQuizAct = {}
     self.AdpWorksheetLevelAct = {}
+    self.KimTriggerQuentinReveal = {}
     self.talkCntQuentin = {}
     self.talkCntRobert = {}
     self.talkCntFord = {}
@@ -76,8 +78,13 @@ function CIFileReader:_init(opt)
         i = i + 1
         local oneLine = line:split('|')
         if setContains(invalid_set, oneLine[1]) then
-            print('Invalid id', oneLine[1])
+            print('Invalid id', oneLine[1], 'line', i)
+            os.exit()
         elseif curId ~= oneLine[1] then -- new ID observed
+            if curId ~= '' then
+                print('### End action', i)
+                self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_end   -- End action
+            end
             id_cnt = id_cnt + 1
             if searchNextAdpPresentQuiz or searchQuizConfirm then
                 print('Error in trace file, line', i,
@@ -91,19 +98,31 @@ function CIFileReader:_init(opt)
             self.AdpBryceSymptomAct[curId] = {}
             self.AdpPresentQuizAct[curId] = {}
             self.AdpWorksheetLevelAct[curId] = {}
+
+            self.KimTriggerQuentinReveal[curId] = 0 -- This table stores number of events that select-kim-reveal act-3 is chosen
+                                                    -- If it is before 1st talk with Quentin,
+                                                    -- select-present-quiz will not be triggered by Quentin 1st talk.
             self.talkCntQuentin[curId] = 0
             self.talkCntRobert[curId] = 0
             self.talkCntFord[curId] = 0
         else
             if searchNextAdpPresentQuiz then
                 if i > talkRobFordQuentinLine + 3 then
-                    print('Error in trace file, line', i, '. select-present-quiz should be in 3 rows from the triggering talk')
-                    --os.exit()
-                    searchNextAdpPresentQuiz = false -- This is not correct, only for testing
-                    invalid_cnt = invalid_cnt+1
-                    tmp_inv_set[#tmp_inv_set + 1] = curId
+                    if self.KimTriggerQuentinReveal[curId] == 0 then
+                        print('Error in trace file, line', i, '. select-present-quiz should be in 3 rows from the triggering talk')
+                        invalid_cnt = invalid_cnt+1
+                        tmp_inv_set[#tmp_inv_set + 1] = curId
+                        searchNextAdpPresentQuiz = false  -- this ignore the current parsing error. Otherwise, comment this line
+                                -- and uncomment next line, so the program will exit at the wrongly formatted line
+                        -- os.exit()
+                    else
+                        -- In this type of situation, Kim let Quentin reveal has been triggered before
+                        -- Quentin's 1st talk. Then select-present-quiz will never be triggered by Quentin.
+                        print('### Kim let Quentin reveal here, so no present-quiz', i)
+                        searchNextAdpPresentQuiz = false
+                    end
                 elseif oneLine[2] == 'DIALOG' and oneLine[6] and (string.sub(oneLine[6], 1, 7) == 'Kimwant' or
-                        string.sub(oneLine[6], 1, 7) == 'Kim,the') then
+                        string.sub(oneLine[6], 1, 7) == 'Kim,the') then     -- player has to talk to Kim first
                     print('### Delete the talk log on line', talkRobFordQuentinLine)
                     self.traceData[curId][#self.traceData[curId]] = nil     -- delete the most recent record
                     talkCntRobFordQuentin[curId] = talkCntRobFordQuentin[curId] - 1     -- decrease count
@@ -175,12 +194,29 @@ function CIFileReader:_init(opt)
                     oneLine[4] ~= 'NoObject' and oneLine[4] ~= 'MultipleObjects' then
                 print('### Test-obj', i)
                 self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_testObject   -- test object action index
+            elseif oneLine[2] == 'ADAPTATION' and oneLine[4] == 'select-worksheet-level' then
+                print('### Submit wrong worksheet', i)
+                self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_submitWorksheet   -- submit worksheet wrong
+                self.AdpWorksheetLevelAct[curId][#self.traceData[curId]] = tonumber(string.sub(oneLine[6], -1, -1))
+            elseif oneLine[2] == 'DIALOG' and oneLine[5] == 'bryce' and string.sub(oneLine[6], 1, 11) == 'BeforeIgots' then
+                print('### Bryce reveal info', i)
+                self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_BryceRevealActOne   -- Bryce reveals info
+            elseif oneLine[2] == 'DIALOG' and oneLine[5] == 'quentin' and string.sub(oneLine[6], 1, 11) == 'Thereissome' then
+                print('### Quentin reveal info', i)
+                self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_QuentinRevealActOne   -- Quentin reveals info
+            elseif oneLine[2] == 'ADAPTATION' and oneLine[4] == 'select-kim-reveal' and
+                    oneLine[6] == 'selected-3' then
+                print('### Kim let Quentin reveal', i)
+                self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_KimLetQuentinRevealActOne   -- Kim let Quentin reveal
+                self.KimTriggerQuentinReveal[curId] = 1
             end
         end
 --        if i == 3000 then
 --            break
 --        end
     end
+    print('### End action', i)
+    self.traceData[curId][#self.traceData[curId] + 1] = usrActInd_end   -- End action for the last user
 
     print('@@@ invalid', invalid_cnt)
     print('###', id_cnt)
@@ -189,6 +225,7 @@ function CIFileReader:_init(opt)
 --    print('### Teresa adp', self.AdpTeresaSymptomAct)
 --    print('### Bryce adp', self.AdpBryceSymptomAct)
 --    print('### PresentQ adp', self.AdpPresentQuizAct)
+--    print('### SubSheet adp', self.AdpWorksheetLevelAct)
 
     traceFile:close()
 end
