@@ -204,7 +204,7 @@ function CIFileReader:_init(opt)
 
     print('@@@ invalid', invalid_cnt)
     print('###', id_cnt)
-    print('!!! inv', tmp_inv_set)
+--    print('!!! inv', tmp_inv_set)
 --    print('@@@', self.traceData)
 --    print('### Teresa adp', self.AdpTeresaSymptomAct)
 --    print('### Bryce adp', self.AdpBryceSymptomAct)
