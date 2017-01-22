@@ -10,11 +10,21 @@ local TableSetMisc = classic.class('TableSetMisc')
 function TableSetMisc.static.addToSet(set, key)
     set[key] = true
 end
+
 function TableSetMisc.static.removeFromSet(set, key)
     set[key] = nil
 end
+
 function TableSetMisc.static.setContains(set, key)
     return set[key] ~= nil
+end
+
+function TableSetMisc.static.countsInSet(set)
+    local cnt = 0
+    for k,v in pairs(set) do
+        cnt = cnt + 1
+    end
+    return cnt
 end
 
 return TableSetMisc

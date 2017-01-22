@@ -28,5 +28,6 @@
 
 local CIFileReader = require 'file_reader'
 local fr = CIFileReader()
+fr:evaluateTraceFile()
 --print('#', #fr.data)
 --print('#', #fr.data, ',', fr.data[1], '@@', fr.data[55][1], fr.data[55][81])
