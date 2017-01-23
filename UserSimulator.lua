@@ -15,6 +15,7 @@ local CIUserSimulator = classic.class('UserSimulator')
 function CIUserSimulator:_init(CIFileReader)
     self.realUserDataStates = {}
     self.realUserDataActs = {}
+    self.CIFr = CIFileReader    -- a ref to the file reader
 
     self.userStateFeatureCnt = CIFileReader.userStateGamePlayFeatureCnt + CIFileReader.userStateSurveyFeatureCnt    -- 18+3 now
 
@@ -23,7 +24,7 @@ function CIUserSimulator:_init(CIFileReader)
         -- set up initial user state before taking actions
         self.realUserDataStates[#self.realUserDataStates + 1] = torch.Tensor(self.userStateFeatureCnt):fill(0)
         for i=1, CIFileReader.userStateSurveyFeatureCnt do
-            -- set up survey features
+            -- set up survey features, which are behind game play features in the state feature tensor
             self.realUserDataStates[#self.realUserDataStates][CIFileReader.userStateGamePlayFeatureCnt+i] = CIFileReader.surveyData[userId][i]
         end
 
@@ -82,6 +83,20 @@ function CIUserSimulator:_init(CIFileReader)
     end
     print('Human user actions number: ', #self.realUserDataStates, #self.realUserDataActs)
     -- Todo: pwang8. Have not normalized state feature values yet.
+end
+
+
+--- Calculate the observed largest state feature value for each game play feature,
+--- and use it to rescale feature value later
+function CIUserSimulator:_calcRealUserStateFeatureRescaleFactor()
+    self.stateFeatureRescaleFactor = torch.Tensor(self.userStateFeatureCnt):fill(1)
+    for _,v in pairs(self.realUserDataStates) do
+        for i=1, self.CIFr.userStateGamePlayFeatureCnt do
+            if self.stateFeatureRescaleFactor[i] < v[i] then
+                self.stateFeatureRescaleFactor[i] = v[i]
+            end
+        end
+    end
 end
 
 return CIUserSimulator
