@@ -10,7 +10,7 @@ fr:evaluateSurveyData()
 
 -- Construct CI user simulator model using real user data
 local CIUserModel = CIUserSimulator(fr)
-CIUserModel:_calcRealUserStateFeatureRescaleFactor()
+
 
 --print('@@', fr.traceData['100-0028'])
 --print('#', #fr.data)

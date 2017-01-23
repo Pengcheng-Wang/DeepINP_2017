@@ -16,6 +16,7 @@ function CIUserSimulator:_init(CIFileReader)
     self.realUserDataStates = {}
     self.realUserDataActs = {}
     self.CIFr = CIFileReader    -- a ref to the file reader
+    self.realUserDataStartLines = {}    -- this table stores the starting line of each real human user's interation
 
     self.userStateFeatureCnt = CIFileReader.userStateGamePlayFeatureCnt + CIFileReader.userStateSurveyFeatureCnt    -- 18+3 now
 
@@ -23,6 +24,7 @@ function CIUserSimulator:_init(CIFileReader)
 
         -- set up initial user state before taking actions
         self.realUserDataStates[#self.realUserDataStates + 1] = torch.Tensor(self.userStateFeatureCnt):fill(0)
+        self.realUserDataStartLines[#self.realUserDataStartLines + 1] = #self.realUserDataStates -- Stores start lines for each user interaction
         for i=1, CIFileReader.userStateSurveyFeatureCnt do
             -- set up survey features, which are behind game play features in the state feature tensor
             self.realUserDataStates[#self.realUserDataStates][CIFileReader.userStateGamePlayFeatureCnt+i] = CIFileReader.surveyData[userId][i]
@@ -82,7 +84,7 @@ function CIUserSimulator:_init(CIFileReader)
 
     end
     print('Human user actions number: ', #self.realUserDataStates, #self.realUserDataActs)
-    -- Todo: pwang8. Have not normalized state feature values yet.
+    self:_calcRealUserStateFeatureRescaleFactor()
 end
 
 
@@ -97,6 +99,12 @@ function CIUserSimulator:_calcRealUserStateFeatureRescaleFactor()
             end
         end
     end
+    print('##', self.stateFeatureRescaleFactor)
+    -- For the 402 CI data, this stateFeatureRescaleFactor vector is
+    -- {44 ,20 ,3 ,9 ,7 ,9 ,7 ,10 ,39 ,43 ,10 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1}
+    -- Note: when real/simulated user data is used in ML algorithms,
+    -- the raw feature values should be divided by this tensor for rescaling.
+    -- torch.cdiv(x, self.stateFeatureRescaleFactor)
 end
 
 return CIUserSimulator
