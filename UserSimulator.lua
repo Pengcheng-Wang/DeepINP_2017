@@ -84,6 +84,9 @@ function CIUserSimulator:_init(CIFileReader)
 
     end
     print('Human user actions number: ', #self.realUserDataStates, #self.realUserDataActs)
+
+    self.stateFeatureRescaleFactor = torch.Tensor(self.userStateFeatureCnt):fill(1)
+    -- Calculate user state feature value rescale factors
     self:_calcRealUserStateFeatureRescaleFactor()
 end
 
@@ -91,7 +94,6 @@ end
 --- Calculate the observed largest state feature value for each game play feature,
 --- and use it to rescale feature value later
 function CIUserSimulator:_calcRealUserStateFeatureRescaleFactor()
-    self.stateFeatureRescaleFactor = torch.Tensor(self.userStateFeatureCnt):fill(1)
     for _,v in pairs(self.realUserDataStates) do
         for i=1, self.CIFr.userStateGamePlayFeatureCnt do
             if self.stateFeatureRescaleFactor[i] < v[i] then
@@ -99,12 +101,17 @@ function CIUserSimulator:_calcRealUserStateFeatureRescaleFactor()
             end
         end
     end
-    print('##', self.stateFeatureRescaleFactor)
+--    print('##', self.stateFeatureRescaleFactor)
     -- For the 402 CI data, this stateFeatureRescaleFactor vector is
     -- {44 ,20 ,3 ,9 ,7 ,9 ,7 ,10 ,39 ,43 ,10 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1}
     -- Note: when real/simulated user data is used in ML algorithms,
     -- the raw feature values should be divided by this tensor for rescaling.
     -- torch.cdiv(x, self.stateFeatureRescaleFactor)
+end
+
+--- Right now, this preprocessing is rescaling
+function CIUserSimulator:preprocessUserStateData(obvUserData)
+    return torch.cdiv(obvUserData, self.stateFeatureRescaleFactor)
 end
 
 return CIUserSimulator

@@ -1,5 +1,6 @@
 local CIFileReader = require 'file_reader'
 local CIUserSimulator = require 'UserSimulator'
+local CIUserActsPredictor = require 'UserSimLearner/UserActsPredictor'
 
 torch.setdefaulttensortype('torch.FloatTensor') -- Todo: pwang8. Change this settig to coordinate with the main setup setting.
 
@@ -10,7 +11,7 @@ fr:evaluateSurveyData()
 
 -- Construct CI user simulator model using real user data
 local CIUserModel = CIUserSimulator(fr)
-
+local CIUserActsPred = CIUserActsPredictor(CIUserModel)
 
 --print('@@', fr.traceData['100-0028'])
 --print('#', #fr.data)
