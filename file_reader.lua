@@ -41,6 +41,11 @@ function CIFileReader:_init(opt)
     self.usrActInd_end = 15
 
     self.traceFilePath = 'data/training-log-corpus.log'  --'data/training-survey-corpus.csv'
+    self.userStateGamePlayFeatureCnt = 18
+    self.usrStateFeatureInd_TeresaSymp = 15
+    self.usrStateFeatureInd_BryceSymp = 16
+    self.usrStateFeatureInd_WorksheetLevel = 17
+    self.usrStateFeatureInd_PresentQuiz = 18
     -- Read data from CSV to tensor
     local traceFile = io.open(self.traceFilePath, 'r')
 --    local header = traceFile:read()
@@ -216,6 +221,7 @@ function CIFileReader:_init(opt)
     --- Read from survey file
     self.surveyFilePath = 'data/training-survey-corpus.csv'
     -- Read data from CSV to tensor
+    self.userStateSurveyFeatureCnt = 3  -- gender, game freqency, pre-score
     local surveyFile = io.open(self.surveyFilePath, 'r')
     surveyFile:read()  -- The 1st line contains column names
     self.surveyData = {}
