@@ -121,7 +121,6 @@ function CIUserActsPredictor:_init(CIUserSimulator)
         -- params init
         local uapLinearLayers = self.model:findModules('nn.Linear')
         for l = 1, #uapLinearLayers do
-            print('@@@@@@@')
             uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
         end
     else
@@ -162,6 +161,8 @@ function CIUserActsPredictor:_init(CIUserSimulator)
             --- set up cuda nn
             self.model = self.model:cuda()
             self.uapCriterion = self.uapCriterion:cuda()
+            self.uapParam = self.uapParam:cuda()
+            self.uapDParam = self.uapDParam:cuda()
         else
             print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
             print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
