@@ -13,7 +13,7 @@ fr:evaluateSurveyData()
 local CIUserModel = CIUserSimulator(fr)
 local CIUserActsPred = CIUserActsPredictor(CIUserModel)
 
-for i=1, 100 do
+for i=1, 2e5 do
     CIUserActsPred:trainOneEpoch()
 end
 
