@@ -128,9 +128,6 @@ function CIUserActsPredictor:_init(CIUserSimulator)
         self.model = torch.load(opt.network)
     end
 
-    -- retrieve parameters and gradients
-    self.uapParam, self.uapDParam = self.model:getParameters()
-
 --    -- verbose
 --    print(self.model)
 
@@ -161,8 +158,6 @@ function CIUserActsPredictor:_init(CIUserSimulator)
             --- set up cuda nn
             self.model = self.model:cuda()
             self.uapCriterion = self.uapCriterion:cuda()
-            self.uapParam = self.uapParam:cuda()
-            self.uapDParam = self.uapDParam:cuda()
         else
             print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
             print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
@@ -170,6 +165,9 @@ function CIUserActsPredictor:_init(CIUserSimulator)
             opt.gpu_id = 0 -- overwrite user setting
         end
     end
+
+    -- retrieve parameters and gradients
+    self.uapParam, self.uapDParam = self.model:getParameters()
 end
 
 
