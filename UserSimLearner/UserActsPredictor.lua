@@ -120,7 +120,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
 
         -- params init
         if opt.gpu_id > 0 then
-            params:uniform(-0.02, 0.02) -- small uniform numbers
+            self.model:getParameters()[1]:uniform(-0.02, 0.02) -- small uniform numbers
         else
             local uapLinearLayers = self.model:findModules('nn.Linear')
             for l = 1, #uapLinearLayers do
