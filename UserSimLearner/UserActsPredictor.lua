@@ -119,9 +119,13 @@ function CIUserActsPredictor:_init(CIUserSimulator)
         end
 
         -- params init
-        local uapLinearLayers = self.model:findModules('nn.Linear')
-        for l = 1, #uapLinearLayers do
-            uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
+        if opt.gpu_id > 0 then
+            params:uniform(-0.02, 0.02) -- small uniform numbers
+        else
+            local uapLinearLayers = self.model:findModules('nn.Linear')
+            for l = 1, #uapLinearLayers do
+                uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
+            end
         end
     else
         print('<trainer> reloading previously trained network')
