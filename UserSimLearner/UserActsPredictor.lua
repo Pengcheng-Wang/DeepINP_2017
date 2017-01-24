@@ -121,6 +121,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
         -- params init
         local uapLinearLayers = self.model:findModules('nn.Linear')
         for l = 1, #uapLinearLayers do
+            print('@@@@@@@')
             uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
         end
     else
@@ -195,10 +196,11 @@ function CIUserActsPredictor:trainOneEpoch()
             k = k + 1
         end
 
+        -- at the end of dataset, if it could not be divided into full batch
         if k ~= opt.batchSize + 1 then
             while k <= opt.batchSize do
                 local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
-                inputs[k] = self.ciUserSimulator.realUserDataStates[randInd]:clone()
+                inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], opt.prepro)
                 targets[k] = self.ciUserSimulator.realUserDataActs[randInd]
                 k = k + 1
             end
