@@ -86,32 +86,56 @@ function CIUserSimulator:_init(CIFileReader)
     print('Human user actions number: ', #self.realUserDataStates, #self.realUserDataActs)
 
     self.stateFeatureRescaleFactor = torch.Tensor(self.userStateFeatureCnt):fill(1)
+    self.stateFeatureMeanEachFeature = torch.Tensor(self.userStateFeatureCnt):fill(0)
+    self.stateFeatureStdEachFeature = torch.Tensor(self.userStateFeatureCnt):fill(1)
     -- Calculate user state feature value rescale factors
     self:_calcRealUserStateFeatureRescaleFactor()
+    collectgarbage()
 end
 
 
 --- Calculate the observed largest state feature value for each game play feature,
 --- and use it to rescale feature value later
 function CIUserSimulator:_calcRealUserStateFeatureRescaleFactor()
+    local allUserDataStates = torch.Tensor(#self.realUserDataStates, self.userStateFeatureCnt)
+    local allInd = 1
     for _,v in pairs(self.realUserDataStates) do
         for i=1, self.CIFr.userStateGamePlayFeatureCnt do
             if self.stateFeatureRescaleFactor[i] < v[i] then
                 self.stateFeatureRescaleFactor[i] = v[i]
             end
         end
+        allUserDataStates[allInd] = v:clone()
+        allInd = allInd + 1
     end
+    self.stateFeatureMeanEachFeature = torch.mean(allUserDataStates, 1):squeeze()
+    self.stateFeatureStdEachFeature = torch.std(allUserDataStates, 1):squeeze()
+--    print('@@', self.stateFeatureMeanEachFeature, '#', self.stateFeatureStdEachFeature)
 --    print('##', self.stateFeatureRescaleFactor)
     -- For the 402 CI data, this stateFeatureRescaleFactor vector is
     -- {44 ,20 ,3 ,9 ,7 ,9 ,7 ,10 ,39 ,43 ,10 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1 ,1}
     -- Note: when real/simulated user data is used in ML algorithms,
     -- the raw feature values should be divided by this tensor for rescaling.
     -- torch.cdiv(x, self.stateFeatureRescaleFactor)
+    -- This is the stateFeatureMeanEachFeature:
+    -- {5.0325, 1.3671, 0.7945, 0.9831, 1.0969, 1.6381, 0.9424, 0.8351, 2.9051,
+    -- 5.3980, 0.6525, 0.2551, 0.2581, 0.1637, 0.4778, 0.5266, 0.2398, 0.4211, 0.4642 ,0.6148 ,0.3487}
+    -- This is the stateFeatureStdEachFeature:
+    -- {4.7120, 2.4729, 0.5952, 0.9774, 1.0633, 1.4782, 0.8478, 0.8897, 5.1906, 6.7046,
+    -- 1.1095, 0.4359, 0.4376, 0.3700, 0.3904, 0.4136, 0.3589, 0.4938, 0.4987, 0.2325, 0.1198}
 end
 
 --- Right now, this preprocessing is rescaling
-function CIUserSimulator:preprocessUserStateData(obvUserData)
-    return torch.cdiv(obvUserData, self.stateFeatureRescaleFactor)
+function CIUserSimulator:preprocessUserStateData(obvUserData, ppType)
+    if ppType == 'rsc' then
+        return torch.cdiv(obvUserData, self.stateFeatureRescaleFactor)
+    elseif ppType == 'std' then
+        local subMean = torch.add(obvUserData, -1, self.stateFeatureMeanEachFeature)
+        return torch.cdiv(subMean, self.stateFeatureStdEachFeature)
+    else
+        print('!!!Error. Unrecognized preprocessing in UserSimulator.', ppType)
+    end
+
 end
 
 return CIUserSimulator

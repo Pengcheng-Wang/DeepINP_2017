@@ -28,7 +28,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
        -f,--full                                use the full dataset
        -p,--plot                                plot while training
        -o,--optimization  (default "rmsprop")       optimization: SGD | LBFGS | adam | rmsprop
-       -r,--learningRate  (default 0.05)        learning rate, for SGD only
+       -r,--learningRate  (default 2e-3)        learning rate, for SGD only
        -b,--batchSize     (default 30)          batch size
        -m,--momentum      (default 0)           momentum, for SGD only
        -i,--maxIter       (default 3)           maximum nb of iterations per batch, for LBFGS
@@ -36,6 +36,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
        --coefL2           (default 0)           L2 penalty on the weights
        -t,--threads       (default 4)           number of threads
        -g,--gpu_id        (default 0)          gpu device id, 0 for using cpu
+       --prepro           (default "std")       input state feature preprocessing: rsc | std
     ]]
 
     -- threads
@@ -185,7 +186,9 @@ function CIUserActsPredictor:trainOneEpoch()
         local k = 1
         for i = t, math.min(t+opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
             -- load new sample
-            local input = self.ciUserSimulator.realUserDataStates[i]:clone()
+            local input = self.ciUserSimulator.realUserDataStates[i]    -- :clone() -- if preprocess is called, clone is not needed, I believe
+            -- need do preprocess for input features
+            input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
             local target = self.ciUserSimulator.realUserDataActs[i]
             inputs[k] = input
             targets[k] = target
@@ -312,7 +315,12 @@ function CIUserActsPredictor:trainOneEpoch()
     print("<trainer> time to learn 1 epoch = " .. (time*1000) .. 'ms')
 
     -- print self.uapConfusion matrix
-    print(self.uapConfusion)
+--    print(self.uapConfusion)
+    self.uapConfusion:updateValids()
+    local confMtxStr = 'average row correct: ' .. (self.uapConfusion.averageValid*100) .. '% \n' ..
+            'average rowUcol correct (VOC measure): ' .. (self.uapConfusion.averageUnionValid*100) .. '% \n' ..
+            ' + global correct: ' .. (self.uapConfusion.totalValid*100) .. '%'
+    print(confMtxStr)
     self.uapTrainLogger:add{['% mean class accuracy (train set)'] = self.uapConfusion.totalValid * 100}
     self.uapConfusion:zero()
 
