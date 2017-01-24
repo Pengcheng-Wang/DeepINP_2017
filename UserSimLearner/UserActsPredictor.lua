@@ -334,7 +334,7 @@ function CIUserActsPredictor:trainOneEpoch()
         os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
     end
     print('<trainer> saving network to '..filename)
-    torch.save(filename, model)
+    torch.save(filename, self.model)
 
     -- next epoch
     self.trainEpoch = self.trainEpoch + 1
