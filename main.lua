@@ -13,6 +13,11 @@ fr:evaluateSurveyData()
 local CIUserModel = CIUserSimulator(fr)
 local CIUserActsPred = CIUserActsPredictor(CIUserModel)
 
+for i=1, 100 do
+    CIUserActsPred:trainOneEpoch()
+end
+
+
 --print('@@', fr.traceData['100-0028'])
 --print('#', #fr.data)
 --print('#', #fr.data, ',', fr.data[1], '@@', fr.data[55][1], fr.data[55][81])
