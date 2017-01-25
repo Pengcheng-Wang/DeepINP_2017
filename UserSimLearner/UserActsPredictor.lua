@@ -306,8 +306,8 @@ function CIUserActsPredictor:trainOneEpoch()
                         local input = self.rnnRealUserDataStates[randInd][j]
                         input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
                         local target = self.rnnRealUserDataActs[randInd][j]
-                        inputs[j][k] = input:clone()
-                        targets[j][k] = target:clone()
+                        inputs[j][k] = input
+                        targets[j][k] = target
                     end
                     k = k + 1
                 end
