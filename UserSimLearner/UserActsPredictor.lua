@@ -11,6 +11,7 @@ require 'torch'
 require 'nn'
 require 'nnx'
 require 'optim'
+require 'rnn'
 local nninit = require 'nninit'
 local _ = require 'moses'
 local class = require 'classic'
@@ -19,12 +20,11 @@ local TableSet = require 'MyMisc.TableSetMisc'
 
 local CIUserActsPredictor = classic.class('UserActsPredictor')
 
-
 function CIUserActsPredictor:_init(CIUserSimulator)
     opt = lapp[[
        -s,--save          (default "uaplogs")      subdirectory to save logs
        -n,--network       (default "")          reload pretrained network
-       -m,--uapModel         (default "mlp")   type of model tor train: moe | mlp | linear
+       -m,--uapModel         (default "mlp")   type of model tor train: moe | mlp | linear | lstm
        -f,--full                                use the full dataset
        -p,--plot                                plot while training
        -o,--optimization  (default "rmsprop")       optimization: SGD | LBFGS | adam | rmsprop
@@ -37,6 +37,8 @@ function CIUserActsPredictor:_init(CIUserSimulator)
        -t,--threads       (default 4)           number of threads
        -g,--gpu_id        (default 0)          gpu device id, 0 for using cpu
        --prepro           (default "std")       input state feature preprocessing: rsc | std
+       --lstmHd           (default 16)          lstm hidden layer size
+       --lstmHist         (default 3)           lstm hist length
     ]]
 
     -- threads
@@ -112,6 +114,21 @@ function CIUserActsPredictor:_init(CIUserSimulator)
             self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
 
+        elseif opt.uapModel == 'lstm' then
+            ------------------------------------------------------------
+            -- lstm
+            ------------------------------------------------------------
+            self.model:add(nn.Reshape(self.inputFeatureNum))
+            local lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.lstmHist) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+            lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
+            lstm:remember('both')
+            self.model:add(lstm)
+            self.model:add(nn.NormStabilizer())
+            self.model:add(nn.Linear(opt.lstmHd, #classes))
+            self.model:add(nn.LogSoftMax())
+            self.model = nn.Sequencer(self.model)
+            ------------------------------------------------------------
+
         else
             print('Unknown model type')
             cmd:text()
@@ -135,6 +152,10 @@ function CIUserActsPredictor:_init(CIUserSimulator)
     -- loss function: negative log-likelihood
     --
     self.uapCriterion = nn.ClassNLLCriterion()
+    if opt.uapModel == 'lstm' then
+        self.uapCriterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
+    end
+
     self.trainEpoch = 1
     -- this matrix records the current confusion across classes
     self.uapConfusion = optim.ConfusionMatrix(classes)
@@ -166,7 +187,43 @@ function CIUserActsPredictor:_init(CIUserSimulator)
         end
     end
 
+    ----------------------------------------------------------------------
+    --- Prepare data for lstm
+    ---
+    self.rnnRealUserDataStates = {}
+    self.rnnRealUserDataActs = {}
+    if opt.uapModel == 'lstm' then
+        local realUserDataEndLines = {}
+        for i=1, #self.ciUserSimulator.realUserDataStartLines - 1 do
+            realUserDataEndLines[i] = self.ciUserSimulator.realUserDataStartLines[i+1] - 1
+        end
+        realUserDataEndLines[#self.ciUserSimulator.realUserDataStartLines] = #self.ciUserSimulator.realUserDataStates
+
+        local indSeqHead = 1
+        local indSeqTail = opt.lstmHist
+        local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
+        while indSeqTail <= #self.ciUserSimulator.realUserDataStates do
+            if indSeqTail <= realUserDataEndLines[indUserSeq] then
+                self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
+                self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
+                for i=1, opt.lstmHist do
+                    self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
+                    self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.ciUserSimulator.realUserDataActs[indSeqHead+i-1]
+                end
+                indSeqHead = indSeqHead + 1
+                indSeqTail = indSeqTail + 1
+            else
+                indUserSeq = indUserSeq + 1 -- next user's records
+                indSeqHead = self.ciUserSimulator.realUserDataStartLines[indUserSeq]
+                indSeqTail = indSeqHead + opt.lstmHist - 1
+            end
+        end
+        -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
+    end
+
+
     -- retrieve parameters and gradients
+    -- have to put these lines here below the gpu setting
     self.uapParam, self.uapDParam = self.model:getParameters()
 end
 
@@ -179,35 +236,97 @@ function CIUserActsPredictor:trainOneEpoch()
     -- do one epoch
     print('<trainer> on training set:')
     print("<trainer> online epoch # " .. self.trainEpoch .. ' [batchSize = ' .. opt.batchSize .. ']')
-    for t = 1, #self.ciUserSimulator.realUserDataStates, opt.batchSize do
-        -- create mini batch
-        local inputs = torch.Tensor(opt.batchSize, self.inputFeatureNum)
-        local targets = torch.Tensor(opt.batchSize)
-        local k = 1
-        for i = t, math.min(t+opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
-            -- load new sample
-            local input = self.ciUserSimulator.realUserDataStates[i]    -- :clone() -- if preprocess is called, clone is not needed, I believe
-            -- need do preprocess for input features
-            input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
-            local target = self.ciUserSimulator.realUserDataActs[i]
-            inputs[k] = input
-            targets[k] = target
-            k = k + 1
-        end
-
-        -- at the end of dataset, if it could not be divided into full batch
-        if k ~= opt.batchSize + 1 then
-            while k <= opt.batchSize do
-                local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
-                inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], opt.prepro)
-                targets[k] = self.ciUserSimulator.realUserDataActs[randInd]
+    local inputs
+    local targets
+    local t = 1
+    local lstmLengthPerBatch = math.ceil(#self.ciUserSimulator.realUserDataStates / opt.batchSize)
+    local lstmIter = 1  -- lstm iterate for each squence starts from this value
+    local epochDone = false
+    while not epochDone do
+        if opt.uapModel ~= 'lstm' then
+            -- create mini batch
+            inputs = torch.Tensor(opt.batchSize, self.inputFeatureNum)
+            targets = torch.Tensor(opt.batchSize)
+            local k = 1
+            for i = t, math.min(t+opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
+                -- load new sample
+                local input = self.ciUserSimulator.realUserDataStates[i]    -- :clone() -- if preprocess is called, clone is not needed, I believe
+                -- need do preprocess for input features
+                input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
+                local target = self.ciUserSimulator.realUserDataActs[i]
+                inputs[k] = input
+                targets[k] = target
                 k = k + 1
             end
-        end
 
-        if opt.gpu_id > 0 then
-            inputs = inputs:cuda()
-            targets = targets:cuda()
+            -- at the end of dataset, if it could not be divided into full batch
+            if k ~= opt.batchSize + 1 then
+                while k <= opt.batchSize do
+                    local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
+                    inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], opt.prepro)
+                    targets[k] = self.ciUserSimulator.realUserDataActs[randInd]
+                    k = k + 1
+                end
+            end
+
+            t = t + opt.batchSize
+            if t > #self.ciUserSimulator.realUserDataStates then
+                epochDone = true
+            end
+
+            if opt.gpu_id > 0 then
+                inputs = inputs:cuda()
+                targets = targets:cuda()
+            end
+
+        else
+            -- lstm
+            inputs = {}
+            targets = {}
+            local k
+            for j = 1, opt.lstmHist do
+                inputs[j] = torch.Tensor(opt.batchSize, self.inputFeatureNum)
+                targets[j] = torch.Tensor(opt.batchSize)
+                k = 1
+                for i = lstmIter, math.min(lstmIter+opt.batchSize-1, #self.rnnRealUserDataStates) do
+                    local input = self.rnnRealUserDataStates[i][j]
+                    input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
+                    local target = self.rnnRealUserDataActs[i][j]
+                    inputs[j][k] = input
+                    targets[j][k] = target
+                    k = k + 1
+                end
+            end
+
+            -- at the end of dataset, if it could not be divided into full batch
+            if k ~= opt.batchSize + 1 then
+                while k <= opt.batchSize do
+                    local randInd = torch.random(1, #self.rnnRealUserDataStates)
+                    for j = 1, opt.lstmHist do
+                        local input = self.rnnRealUserDataStates[randInd][j]
+                        input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
+                        local target = self.rnnRealUserDataActs[randInd][j]
+                        inputs[j][k] = input
+                        targets[j][k] = target
+                    end
+                    k = k + 1
+                end
+            end
+
+            lstmIter = lstmIter + opt.batchSize
+            if lstmIter > #self.rnnRealUserDataStates then
+                epochDone = true
+            end
+
+            if opt.gpu_id > 0 then
+                for _,v in pairs(inputs) do
+                    v = v:cuda()
+                end
+                for _,v in pairs(targets) do
+                    v = v:cuda()
+                end
+            end
+
         end
 
         -- create closure to evaluate f(X) and df/dX
@@ -245,12 +364,25 @@ function CIUserActsPredictor:trainOneEpoch()
             end
 
             -- update self.uapConfusion
-            for i = 1,opt.batchSize do
-                self.uapConfusion:add(outputs[i], targets[i])
+            if opt.uapModel == 'lstm' then
+                for j = 1, opt.lstmHist do
+                    for i = 1,opt.batchSize do
+                        self.uapConfusion:add(outputs[j][i], targets[j][i])
+                    end
+                end
+            else
+                for i = 1,opt.batchSize do
+                    self.uapConfusion:add(outputs[i], targets[i])
+                end
             end
 
             -- return f and df/dX
             return f, self.uapDParam
+        end
+
+        self.model:training()
+        if opt.uapModel == 'lstm' then
+            self.model:forget()
         end
 
         -- optimize on current mini-batch
@@ -280,7 +412,12 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.sgd(feval, self.uapParam, sgdState)
 
             -- disp progress
-            xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
+            if opt.uapModel ~= 'lstm' then
+                xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
+            else
+                xlua.progress(lstmIter, #self.rnnRealUserDataStates)
+            end
+
 
         elseif opt.optimization == 'adam' then
 
@@ -292,7 +429,11 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.adam(feval, self.uapParam, adamState)
 
             -- disp progress
-            xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
+            if opt.uapModel ~= 'lstm' then
+                xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
+            else
+                xlua.progress(lstmIter, #self.rnnRealUserDataStates)
+            end
 
         elseif opt.optimization == 'rmsprop' then
 
@@ -303,7 +444,11 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.rmsprop(feval, self.uapParam, rmspropState)
 
             -- disp progress
-            xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
+            if opt.uapModel ~= 'lstm' then
+                xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
+            else
+                xlua.progress(lstmIter, #self.rnnRealUserDataStates)
+            end
 
         else
             error('unknown optimization method')

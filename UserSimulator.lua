@@ -91,8 +91,20 @@ function CIUserSimulator:_init(CIFileReader)
     -- Calculate user state feature value rescale factors
     self:_calcRealUserStateFeatureRescaleFactor()
     collectgarbage()
-end
 
+    -- The shortest length record has a user actoin sequence length of 2. User id is 100-0466
+--    -- calc min length
+--    local minlen = 9999
+--    for i=1,#self.realUserDataStartLines-1 do
+--        if minlen > self.realUserDataStartLines[i+1] - self.realUserDataStartLines[i] then
+--            minlen = self.realUserDataStartLines[i+1] - self.realUserDataStartLines[i]
+--        end
+--    end
+--    if minlen > #self.realUserDataStates - self.realUserDataStartLines[#self.realUserDataStartLines] then
+--        minlen = #self.realUserDataStates - self.realUserDataStartLines[#self.realUserDataStartLines]
+--    end
+--    print('$$$$$ min traj length is', minlen) os.exit()
+end
 
 --- Calculate the observed largest state feature value for each game play feature,
 --- and use it to rescale feature value later
