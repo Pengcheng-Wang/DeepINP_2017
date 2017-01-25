@@ -1,9 +1,10 @@
 --
 -- User: pwang8
--- Date: 1/23/17
--- Time: 12:43 PM
--- Implement a classification problem to predict user's next action in CI
--- user simulation model. Definition of user's state features and actions
+-- Date: 1/25/17
+-- Time: 11:06 AM
+-- Implement a classification problem to predict user's final score (nlg)
+-- in CI user simulation model.
+-- Definition of user's state features and actions
 -- are in the CI ijcai document.
 --
 
@@ -18,13 +19,13 @@ local class = require 'classic'
 require 'classic.torch' -- Enables serialisation
 local TableSet = require 'MyMisc.TableSetMisc'
 
-local CIUserActsPredictor = classic.class('UserActsPredictor')
+local CIUserScorePredictor = classic.class('UserScorePredictor')
 
-function CIUserActsPredictor:_init(CIUserSimulator)
+function CIUserScorePredictor:_init(CIUserSimulator)
     opt = lapp[[
        -s,--save          (default "uaplogs")      subdirectory to save logs
        -n,--network       (default "")          reload pretrained network
-       -m,--uapModel         (default "mlp")   type of model tor train: moe | mlp | linear | lstm
+       -m,--uspModel         (default "mlp")   type of model tor train: moe | mlp | linear | lstm
        -f,--full                                use the full dataset
        -p,--plot                                plot while training
        -o,--optimization  (default "rmsprop")       optimization: SGD | LBFGS | adam | rmsprop
@@ -61,7 +62,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
         -- define model to train
         self.model = nn.Sequential()
 
-        if opt.uapModel == 'moe' then
+        if opt.uspModel == 'moe' then
             ------------------------------------------------------------
             -- mixture of experts
             ------------------------------------------------------------
@@ -92,7 +93,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
             self.model:add(nn.MixtureTable())
             ------------------------------------------------------------
 
-        elseif opt.uapModel == 'mlp' then
+        elseif opt.uspModel == 'mlp' then
             ------------------------------------------------------------
             -- regular 2-layer MLP
             ------------------------------------------------------------
@@ -105,7 +106,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
             self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
 
-        elseif opt.uapModel == 'linear' then
+        elseif opt.uspModel == 'linear' then
             ------------------------------------------------------------
             -- simple linear model: logistic regression
             ------------------------------------------------------------
@@ -114,7 +115,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
             self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
 
-        elseif opt.uapModel == 'lstm' then
+        elseif opt.uspModel == 'lstm' then
             ------------------------------------------------------------
             -- lstm
             ------------------------------------------------------------
@@ -136,23 +137,23 @@ function CIUserActsPredictor:_init(CIUserSimulator)
         end
 
         -- params init
-        local uapLinearLayers = self.model:findModules('nn.Linear')
-        for l = 1, #uapLinearLayers do
-            uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
+        local uspLinearLayers = self.model:findModules('nn.Linear')
+        for l = 1, #uspLinearLayers do
+            uspLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
         end
     else
         print('<trainer> reloading previously trained network')
         self.model = torch.load(opt.network)
     end
 
---    -- verbose
---    print(self.model)
+    --    -- verbose
+    --    print(self.model)
 
     ----------------------------------------------------------------------
     -- loss function: negative log-likelihood
     --
     self.uapCriterion = nn.ClassNLLCriterion()
-    if opt.uapModel == 'lstm' then
+    if opt.uspModel == 'lstm' then
         self.uapCriterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
     end
 
@@ -175,7 +176,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
         if ok and ok2 then
             print('using CUDA on GPU ' .. opt.gpu_id .. '...')
             cutorch.setDevice(opt.gpu_id)
---            cutorch.manualSeed(opt.seed)
+            --            cutorch.manualSeed(opt.seed)
             --- set up cuda nn
             self.model = self.model:cuda()
             self.uapCriterion = self.uapCriterion:cuda()
@@ -192,7 +193,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
     ---
     self.rnnRealUserDataStates = {}
     self.rnnRealUserDataActs = {}
-    if opt.uapModel == 'lstm' then
+    if opt.uspModel == 'lstm' then
         local indSeqHead = 1
         local indSeqTail = opt.lstmHist
         local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
@@ -237,7 +238,7 @@ function CIUserActsPredictor:trainOneEpoch()
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
     local epochDone = false
     while not epochDone do
-        if opt.uapModel ~= 'lstm' then
+        if opt.uspModel ~= 'lstm' then
             -- create mini batch
             inputs = torch.Tensor(opt.batchSize, self.inputFeatureNum)
             targets = torch.Tensor(opt.batchSize)
@@ -358,7 +359,7 @@ function CIUserActsPredictor:trainOneEpoch()
             end
 
             -- update self.uapConfusion
-            if opt.uapModel == 'lstm' then
+            if opt.uspModel == 'lstm' then
                 for j = 1, opt.lstmHist do
                     for i = 1,opt.batchSize do
                         self.uapConfusion:add(outputs[j][i], targets[j][i])
@@ -375,7 +376,7 @@ function CIUserActsPredictor:trainOneEpoch()
         end
 
         self.model:training()
-        if opt.uapModel == 'lstm' then
+        if opt.uspModel == 'lstm' then
             self.model:forget()
         end
 
@@ -406,7 +407,7 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.sgd(feval, self.uapParam, sgdState)
 
             -- disp progress
-            if opt.uapModel ~= 'lstm' then
+            if opt.uspModel ~= 'lstm' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -423,7 +424,7 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.adam(feval, self.uapParam, adamState)
 
             -- disp progress
-            if opt.uapModel ~= 'lstm' then
+            if opt.uspModel ~= 'lstm' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -438,7 +439,7 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.rmsprop(feval, self.uapParam, rmspropState)
 
             -- disp progress
-            if opt.uapModel ~= 'lstm' then
+            if opt.uspModel ~= 'lstm' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -455,7 +456,7 @@ function CIUserActsPredictor:trainOneEpoch()
     print("<trainer> time to learn 1 epoch = " .. (time*1000) .. 'ms')
 
     -- print self.uapConfusion matrix
---    print(self.uapConfusion)
+    --    print(self.uapConfusion)
     self.uapConfusion:updateValids()
     local confMtxStr = 'average row correct: ' .. (self.uapConfusion.averageValid*100) .. '% \n' ..
             'average rowUcol correct (VOC measure): ' .. (self.uapConfusion.averageUnionValid*100) .. '% \n' ..
@@ -479,3 +480,4 @@ end
 
 
 return CIUserActsPredictor
+

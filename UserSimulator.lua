@@ -15,8 +15,10 @@ local CIUserSimulator = classic.class('UserSimulator')
 function CIUserSimulator:_init(CIFileReader)
     self.realUserDataStates = {}
     self.realUserDataActs = {}
+    self.realUserDataRewards = {}
     self.CIFr = CIFileReader    -- a ref to the file reader
     self.realUserDataStartLines = {}    -- this table stores the starting line of each real human user's interation
+    self.realUserDataEndLines = {}
 
     self.userStateFeatureCnt = CIFileReader.userStateGamePlayFeatureCnt + CIFileReader.userStateSurveyFeatureCnt    -- 18+3 now
 
@@ -33,6 +35,12 @@ function CIUserSimulator:_init(CIFileReader)
         for time, act in ipairs(userRcd) do
             self.realUserDataActs[#self.realUserDataStates] = act
 --            print('#', userId, self.realUserDataStates[#self.realUserDataStates], ',', self.realUserDataActs[#self.realUserDataStates])
+
+            if CIFileReader.surveyData[userId][CIFileReader.userStateSurveyFeatureCnt+1] > 0 then
+                self.realUserDataRewards[#self.realUserDataStates] = 1
+            else
+                self.realUserDataRewards[#self.realUserDataStates] = -1     --Todo:pwang8. not sure if this should be -1 or 0, for classification
+            end
 
             if act == CIFileReader.usrActInd_end then
 --                print('@@ End action reached')
@@ -85,6 +93,11 @@ function CIUserSimulator:_init(CIFileReader)
     end
     print('Human user actions number: ', #self.realUserDataStates, #self.realUserDataActs)
 
+    for i=1, #self.realUserDataStartLines - 1 do
+        self.realUserDataEndLines[i] = self.realUserDataStartLines[i+1] - 1
+    end
+    self.realUserDataEndLines[#self.realUserDataStartLines] = #self.realUserDataStates
+
     self.stateFeatureRescaleFactor = torch.Tensor(self.userStateFeatureCnt):fill(1)
     self.stateFeatureMeanEachFeature = torch.Tensor(self.userStateFeatureCnt):fill(0)
     self.stateFeatureStdEachFeature = torch.Tensor(self.userStateFeatureCnt):fill(1)
@@ -104,6 +117,7 @@ function CIUserSimulator:_init(CIFileReader)
 --        minlen = #self.realUserDataStates - self.realUserDataStartLines[#self.realUserDataStartLines]
 --    end
 --    print('$$$$$ min traj length is', minlen) os.exit()
+    -- 273 students with postive nlg, 39 with 0 nlg, 90 with negative nlg. 67.9%
 end
 
 --- Calculate the observed largest state feature value for each game play feature,
