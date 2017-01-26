@@ -24,11 +24,11 @@ function CIUserActsPredictor:_init(CIUserSimulator)
     opt = lapp[[
        -s,--save          (default "uaplogs")      subdirectory to save logs
        -n,--network       (default "")          reload pretrained network
-       -m,--uapModel         (default "mlp")   type of model tor train: moe | mlp | linear | lstm
+       -m,--uapModel         (default "lstm")   type of model tor train: moe | mlp | linear | lstm
        -f,--full                                use the full dataset
        -p,--plot                                plot while training
-       -o,--optimization  (default "rmsprop")       optimization: SGD | LBFGS | adam | rmsprop
-       -r,--learningRate  (default 2e-3)        learning rate, for SGD only
+       -o,--optimization  (default "adam")       optimization: SGD | LBFGS | adam | rmsprop
+       -r,--learningRate  (default 2e-4)        learning rate, for SGD only
        -b,--batchSize     (default 30)          batch size
        -m,--momentum      (default 0)           momentum, for SGD only
        -i,--maxIter       (default 3)           maximum nb of iterations per batch, for LBFGS
@@ -37,8 +37,8 @@ function CIUserActsPredictor:_init(CIUserSimulator)
        -t,--threads       (default 4)           number of threads
        -g,--gpu_id        (default 0)          gpu device id, 0 for using cpu
        --prepro           (default "std")       input state feature preprocessing: rsc | std
-       --lstmHd           (default 16)          lstm hidden layer size
-       --lstmHist         (default 3)           lstm hist length
+       --lstmHd           (default 192)          lstm hidden layer size
+       --lstmHist         (default 5)           lstm hist length
     ]]
 
     -- threads
@@ -451,7 +451,7 @@ function CIUserActsPredictor:trainOneEpoch()
 
     -- time taken
     time = sys.clock() - time
-    time = time / #self.ciUserSimulator.realUserDataStates
+--    time = time / #self.ciUserSimulator.realUserDataStates
     print("<trainer> time to learn 1 epoch = " .. (time*1000) .. 'ms')
 
     -- print self.uapConfusion matrix

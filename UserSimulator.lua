@@ -39,7 +39,7 @@ function CIUserSimulator:_init(CIFileReader)
             if CIFileReader.surveyData[userId][CIFileReader.userStateSurveyFeatureCnt+1] > 0 then
                 self.realUserDataRewards[#self.realUserDataStates] = 1
             else
-                self.realUserDataRewards[#self.realUserDataStates] = -1     --Todo:pwang8. not sure if this should be -1 or 0, for classification
+                self.realUserDataRewards[#self.realUserDataStates] = 2     -- This is (binary) reward class label, not reward value
             end
 
             if act == CIFileReader.usrActInd_end then

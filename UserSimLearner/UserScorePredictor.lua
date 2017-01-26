@@ -23,13 +23,13 @@ local CIUserScorePredictor = classic.class('UserScorePredictor')
 
 function CIUserScorePredictor:_init(CIUserSimulator)
     opt = lapp[[
-       -s,--save          (default "uaplogs")      subdirectory to save logs
+       -s,--save          (default "usplogs")      subdirectory to save logs
        -n,--network       (default "")          reload pretrained network
-       -m,--uspModel         (default "mlp")   type of model tor train: moe | mlp | linear | lstm
+       -m,--uspModel         (default "lstm")   type of model tor train: moe | mlp | linear | lstm
        -f,--full                                use the full dataset
        -p,--plot                                plot while training
-       -o,--optimization  (default "rmsprop")       optimization: SGD | LBFGS | adam | rmsprop
-       -r,--learningRate  (default 2e-3)        learning rate, for SGD only
+       -o,--optimization  (default "adam")       optimization: SGD | LBFGS | adam | rmsprop
+       -r,--learningRate  (default 2e-4)        learning rate, for SGD only
        -b,--batchSize     (default 30)          batch size
        -m,--momentum      (default 0)           momentum, for SGD only
        -i,--maxIter       (default 3)           maximum nb of iterations per batch, for LBFGS
@@ -38,8 +38,8 @@ function CIUserScorePredictor:_init(CIUserSimulator)
        -t,--threads       (default 4)           number of threads
        -g,--gpu_id        (default 0)          gpu device id, 0 for using cpu
        --prepro           (default "std")       input state feature preprocessing: rsc | std
-       --lstmHd           (default 16)          lstm hidden layer size
-       --lstmHist         (default 3)           lstm hist length
+       --lstmHd           (default 192)          lstm hidden layer size
+       --lstmHist         (default 5)           lstm hist length
     ]]
 
     -- threads
@@ -55,7 +55,7 @@ function CIUserScorePredictor:_init(CIUserSimulator)
     -- on the 15-class classification problem
     --
     classes = {}
-    for i=1, CIUserSimulator.CIFr.usrActInd_end do classes[i] = i end
+    for i=1,2 do classes[i] = i end
     self.inputFeatureNum = CIUserSimulator.realUserDataStates[1]:size()[1]
 
     if opt.network == '' then
@@ -152,18 +152,18 @@ function CIUserScorePredictor:_init(CIUserSimulator)
     ----------------------------------------------------------------------
     -- loss function: negative log-likelihood
     --
-    self.uapCriterion = nn.ClassNLLCriterion()
+    self.uspCriterion = nn.ClassNLLCriterion()
     if opt.uspModel == 'lstm' then
-        self.uapCriterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
+        self.uspCriterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
     end
 
     self.trainEpoch = 1
     -- this matrix records the current confusion across classes
-    self.uapConfusion = optim.ConfusionMatrix(classes)
+    self.uspConfusion = optim.ConfusionMatrix(classes)
 
     -- log results to files
-    self.uapTrainLogger = optim.Logger(paths.concat(opt.save, 'train.log'))
-    self.uapTestLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
+    self.uspTrainLogger = optim.Logger(paths.concat(opt.save, 'train.log'))
+    self.uspTestLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
 
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
@@ -179,7 +179,7 @@ function CIUserScorePredictor:_init(CIUserSimulator)
             --            cutorch.manualSeed(opt.seed)
             --- set up cuda nn
             self.model = self.model:cuda()
-            self.uapCriterion = self.uapCriterion:cuda()
+            self.uspCriterion = self.uspCriterion:cuda()
         else
             print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
             print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
@@ -192,7 +192,7 @@ function CIUserScorePredictor:_init(CIUserSimulator)
     --- Prepare data for lstm
     ---
     self.rnnRealUserDataStates = {}
-    self.rnnRealUserDataActs = {}
+    self.rnnRealUserDataRewards = {}
     if opt.uspModel == 'lstm' then
         local indSeqHead = 1
         local indSeqTail = opt.lstmHist
@@ -200,10 +200,10 @@ function CIUserScorePredictor:_init(CIUserSimulator)
         while indSeqTail <= #self.ciUserSimulator.realUserDataStates do
             if indSeqTail <= self.ciUserSimulator.realUserDataEndLines[indUserSeq] then
                 self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
-                self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
+                self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
                 for i=1, opt.lstmHist do
                     self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
-                    self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.ciUserSimulator.realUserDataActs[indSeqHead+i-1]
+                    self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.ciUserSimulator.realUserDataRewards[indSeqHead+i-1]
                 end
                 indSeqHead = indSeqHead + 1
                 indSeqTail = indSeqTail + 1
@@ -219,12 +219,12 @@ function CIUserScorePredictor:_init(CIUserSimulator)
 
     -- retrieve parameters and gradients
     -- have to put these lines here below the gpu setting
-    self.uapParam, self.uapDParam = self.model:getParameters()
+    self.uspParam, self.uspDParam = self.model:getParameters()
 end
 
 
 -- training function
-function CIUserActsPredictor:trainOneEpoch()
+function CIUserScorePredictor:trainOneEpoch()
     -- local vars
     local time = sys.clock()
 
@@ -248,7 +248,7 @@ function CIUserActsPredictor:trainOneEpoch()
                 local input = self.ciUserSimulator.realUserDataStates[i]    -- :clone() -- if preprocess is called, clone is not needed, I believe
                 -- need do preprocess for input features
                 input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
-                local target = self.ciUserSimulator.realUserDataActs[i]
+                local target = self.ciUserSimulator.realUserDataRewards[i]
                 inputs[k] = input
                 targets[k] = target
                 k = k + 1
@@ -259,7 +259,7 @@ function CIUserActsPredictor:trainOneEpoch()
                 while k <= opt.batchSize do
                     local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
                     inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], opt.prepro)
-                    targets[k] = self.ciUserSimulator.realUserDataActs[randInd]
+                    targets[k] = self.ciUserSimulator.realUserDataRewards[randInd]
                     k = k + 1
                 end
             end
@@ -286,7 +286,7 @@ function CIUserActsPredictor:trainOneEpoch()
                 for i = lstmIter, math.min(lstmIter+opt.batchSize-1, #self.rnnRealUserDataStates) do
                     local input = self.rnnRealUserDataStates[i][j]
                     input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
-                    local target = self.rnnRealUserDataActs[i][j]
+                    local target = self.rnnRealUserDataRewards[i][j]
                     inputs[j][k] = input
                     targets[j][k] = target
                     k = k + 1
@@ -300,7 +300,7 @@ function CIUserActsPredictor:trainOneEpoch()
                     for j = 1, opt.lstmHist do
                         local input = self.rnnRealUserDataStates[randInd][j]
                         input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
-                        local target = self.rnnRealUserDataActs[randInd][j]
+                        local target = self.rnnRealUserDataRewards[randInd][j]
                         inputs[j][k] = input
                         targets[j][k] = target
                     end
@@ -330,19 +330,19 @@ function CIUserActsPredictor:trainOneEpoch()
             collectgarbage()
 
             -- get new parameters
-            if x ~= self.uapParam then
-                self.uapParam:copy(x)
+            if x ~= self.uspParam then
+                self.uspParam:copy(x)
             end
 
             -- reset gradients
-            self.uapDParam:zero()
+            self.uspDParam:zero()
 
             -- evaluate function for complete mini batch
             local outputs = self.model:forward(inputs)
-            local f = self.uapCriterion:forward(outputs, targets)
+            local f = self.uspCriterion:forward(outputs, targets)
 
             -- estimate df/dW
-            local df_do = self.uapCriterion:backward(outputs, targets)
+            local df_do = self.uspCriterion:backward(outputs, targets)
             self.model:backward(inputs, df_do)
 
             -- penalties (L1 and L2):
@@ -351,28 +351,28 @@ function CIUserActsPredictor:trainOneEpoch()
                 local norm,sign= torch.norm,torch.sign
 
                 -- Loss:
-                f = f + opt.coefL1 * norm(self.uapParam,1)
-                f = f + opt.coefL2 * norm(self.uapParam,2)^2/2
+                f = f + opt.coefL1 * norm(self.uspParam,1)
+                f = f + opt.coefL2 * norm(self.uspParam,2)^2/2
 
                 -- Gradients:
-                self.uapDParam:add( sign(self.uapParam):mul(opt.coefL1) + self.uapParam:clone():mul(opt.coefL2) )
+                self.uspDParam:add( sign(self.uspParam):mul(opt.coefL1) + self.uspParam:clone():mul(opt.coefL2) )
             end
 
-            -- update self.uapConfusion
+            -- update self.uspConfusion
             if opt.uspModel == 'lstm' then
                 for j = 1, opt.lstmHist do
                     for i = 1,opt.batchSize do
-                        self.uapConfusion:add(outputs[j][i], targets[j][i])
+                        self.uspConfusion:add(outputs[j][i], targets[j][i])
                     end
                 end
             else
                 for i = 1,opt.batchSize do
-                    self.uapConfusion:add(outputs[i], targets[i])
+                    self.uspConfusion:add(outputs[i], targets[i])
                 end
             end
 
             -- return f and df/dX
-            return f, self.uapDParam
+            return f, self.uspDParam
         end
 
         self.model:training()
@@ -388,7 +388,7 @@ function CIUserActsPredictor:trainOneEpoch()
                 maxIter = opt.maxIter,
                 lineSearch = optim.lswolfe
             }
-            optim.lbfgs(feval, self.uapParam, lbfgsState)
+            optim.lbfgs(feval, self.uspParam, lbfgsState)
 
             -- disp report:
             print('LBFGS step')
@@ -404,7 +404,7 @@ function CIUserActsPredictor:trainOneEpoch()
                 momentum = opt.momentum,
                 learningRateDecay = 5e-7
             }
-            optim.sgd(feval, self.uapParam, sgdState)
+            optim.sgd(feval, self.uspParam, sgdState)
 
             -- disp progress
             if opt.uspModel ~= 'lstm' then
@@ -421,7 +421,7 @@ function CIUserActsPredictor:trainOneEpoch()
                 learningRate = opt.learningRate,
                 learningRateDecay = 5e-7
             }
-            optim.adam(feval, self.uapParam, adamState)
+            optim.adam(feval, self.uspParam, adamState)
 
             -- disp progress
             if opt.uspModel ~= 'lstm' then
@@ -436,7 +436,7 @@ function CIUserActsPredictor:trainOneEpoch()
             rmspropState = rmspropState or {
                 learningRate = opt.learningRate
             }
-            optim.rmsprop(feval, self.uapParam, rmspropState)
+            optim.rmsprop(feval, self.uspParam, rmspropState)
 
             -- disp progress
             if opt.uspModel ~= 'lstm' then
@@ -452,21 +452,21 @@ function CIUserActsPredictor:trainOneEpoch()
 
     -- time taken
     time = sys.clock() - time
-    time = time / #self.ciUserSimulator.realUserDataStates
+--    time = time / #self.ciUserSimulator.realUserDataStates  -- This is not accurate, if lstm is used
     print("<trainer> time to learn 1 epoch = " .. (time*1000) .. 'ms')
 
-    -- print self.uapConfusion matrix
-    --    print(self.uapConfusion)
-    self.uapConfusion:updateValids()
-    local confMtxStr = 'average row correct: ' .. (self.uapConfusion.averageValid*100) .. '% \n' ..
-            'average rowUcol correct (VOC measure): ' .. (self.uapConfusion.averageUnionValid*100) .. '% \n' ..
-            ' + global correct: ' .. (self.uapConfusion.totalValid*100) .. '%'
+    -- print self.uspConfusion matrix
+    --    print(self.uspConfusion)
+    self.uspConfusion:updateValids()
+    local confMtxStr = 'average row correct: ' .. (self.uspConfusion.averageValid*100) .. '% \n' ..
+            'average rowUcol correct (VOC measure): ' .. (self.uspConfusion.averageUnionValid*100) .. '% \n' ..
+            ' + global correct: ' .. (self.uspConfusion.totalValid*100) .. '%'
     print(confMtxStr)
-    self.uapTrainLogger:add{['% mean class accuracy (train set)'] = self.uapConfusion.totalValid * 100}
-    self.uapConfusion:zero()
+    self.uspTrainLogger:add{['% mean class accuracy (train set)'] = self.uspConfusion.totalValid * 100}
+    self.uspConfusion:zero()
 
     -- save/log current net
-    local filename = paths.concat(opt.save, 'uap.t7')
+    local filename = paths.concat(opt.save, 'usp.t7')
     os.execute('mkdir -p ' .. sys.dirname(filename))
     if paths.filep(filename) then
         os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
@@ -479,5 +479,5 @@ function CIUserActsPredictor:trainOneEpoch()
 end
 
 
-return CIUserActsPredictor
+return CIUserScorePredictor
 
