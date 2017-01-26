@@ -20,26 +20,7 @@ local TableSet = require 'MyMisc.TableSetMisc'
 
 local CIUserActsPredictor = classic.class('UserActsPredictor')
 
-function CIUserActsPredictor:_init(CIUserSimulator)
-    opt = lapp[[
-       -s,--save          (default "uaplogs")      subdirectory to save logs
-       -n,--network       (default "")          reload pretrained network
-       -m,--uapModel         (default "lstm")   type of model tor train: moe | mlp | linear | lstm
-       -f,--full                                use the full dataset
-       -p,--plot                                plot while training
-       -o,--optimization  (default "adam")       optimization: SGD | LBFGS | adam | rmsprop
-       -r,--learningRate  (default 2e-4)        learning rate, for SGD only
-       -b,--batchSize     (default 30)          batch size
-       -m,--momentum      (default 0)           momentum, for SGD only
-       -i,--maxIter       (default 3)           maximum nb of iterations per batch, for LBFGS
-       --coefL1           (default 0)           L1 penalty on the weights
-       --coefL2           (default 0)           L2 penalty on the weights
-       -t,--threads       (default 4)           number of threads
-       -g,--gpu_id        (default 0)          gpu device id, 0 for using cpu
-       --prepro           (default "std")       input state feature preprocessing: rsc | std
-       --lstmHd           (default 192)          lstm hidden layer size
-       --lstmHist         (default 5)           lstm hist length
-    ]]
+function CIUserActsPredictor:_init(CIUserSimulator, opt)
 
     -- threads
     torch.setnumthreads(opt.threads)
@@ -61,7 +42,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
         -- define model to train
         self.model = nn.Sequential()
 
-        if opt.uapModel == 'moe' then
+        if opt.uppModel == 'moe' then
             ------------------------------------------------------------
             -- mixture of experts
             ------------------------------------------------------------
@@ -92,7 +73,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
             self.model:add(nn.MixtureTable())
             ------------------------------------------------------------
 
-        elseif opt.uapModel == 'mlp' then
+        elseif opt.uppModel == 'mlp' then
             ------------------------------------------------------------
             -- regular 2-layer MLP
             ------------------------------------------------------------
@@ -105,7 +86,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
             self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
 
-        elseif opt.uapModel == 'linear' then
+        elseif opt.uppModel == 'linear' then
             ------------------------------------------------------------
             -- simple linear model: logistic regression
             ------------------------------------------------------------
@@ -114,7 +95,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
             self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
 
-        elseif opt.uapModel == 'lstm' then
+        elseif opt.uppModel == 'lstm' then
             ------------------------------------------------------------
             -- lstm
             ------------------------------------------------------------
@@ -152,7 +133,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
     -- loss function: negative log-likelihood
     --
     self.uapCriterion = nn.ClassNLLCriterion()
-    if opt.uapModel == 'lstm' then
+    if opt.uppModel == 'lstm' then
         self.uapCriterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
     end
 
@@ -192,7 +173,7 @@ function CIUserActsPredictor:_init(CIUserSimulator)
     ---
     self.rnnRealUserDataStates = {}
     self.rnnRealUserDataActs = {}
-    if opt.uapModel == 'lstm' then
+    if opt.uppModel == 'lstm' then
         local indSeqHead = 1
         local indSeqTail = opt.lstmHist
         local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
@@ -237,7 +218,7 @@ function CIUserActsPredictor:trainOneEpoch()
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
     local epochDone = false
     while not epochDone do
-        if opt.uapModel ~= 'lstm' then
+        if opt.uppModel ~= 'lstm' then
             -- create mini batch
             inputs = torch.Tensor(opt.batchSize, self.inputFeatureNum)
             targets = torch.Tensor(opt.batchSize)
@@ -358,7 +339,7 @@ function CIUserActsPredictor:trainOneEpoch()
             end
 
             -- update self.uapConfusion
-            if opt.uapModel == 'lstm' then
+            if opt.uppModel == 'lstm' then
                 for j = 1, opt.lstmHist do
                     for i = 1,opt.batchSize do
                         self.uapConfusion:add(outputs[j][i], targets[j][i])
@@ -375,7 +356,7 @@ function CIUserActsPredictor:trainOneEpoch()
         end
 
         self.model:training()
-        if opt.uapModel == 'lstm' then
+        if opt.uppModel == 'lstm' then
             self.model:forget()
         end
 
@@ -406,7 +387,7 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.sgd(feval, self.uapParam, sgdState)
 
             -- disp progress
-            if opt.uapModel ~= 'lstm' then
+            if opt.uppModel ~= 'lstm' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -423,7 +404,7 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.adam(feval, self.uapParam, adamState)
 
             -- disp progress
-            if opt.uapModel ~= 'lstm' then
+            if opt.uppModel ~= 'lstm' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -438,7 +419,7 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.rmsprop(feval, self.uapParam, rmspropState)
 
             -- disp progress
-            if opt.uapModel ~= 'lstm' then
+            if opt.uppModel ~= 'lstm' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
