@@ -173,29 +173,49 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     ---
     self.rnnRealUserDataStates = {}
     self.rnnRealUserDataActs = {}
+    self.rnnRealUserDataPad = torch.Tensor(#self.ciUserSimulator.realUserDataStartLines):fill(0)    -- indicating whether data has padding at head (should be padded)
     if opt.uppModel == 'lstm' then
         local indSeqHead = 1
         local indSeqTail = opt.lstmHist
         local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
         while indSeqTail <= #self.ciUserSimulator.realUserDataStates do
-            if indSeqTail <= self.ciUserSimulator.realUserDataEndLines[indUserSeq] then
-                self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
-                self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
-                for i=1, opt.lstmHist do
-                    self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
-                    self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.ciUserSimulator.realUserDataActs[indSeqHead+i-1]
+            if self.rnnRealUserDataPad[indUserSeq] < 1 then
+                for padi = opt.lstmHist-1, 1, -1 do
+                    self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
+                    self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
+                    for i=1, padi do
+                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = torch.Tensor(self.ciUserSimulator.userStateFeatureCnt):fill(0)
+                        self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.ciUserSimulator.realUserDataActs[indSeqHead]  -- duplicate the 1st user action for padded states
+                    end
+                    for i=1, opt.lstmHist-padi do
+                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i+padi] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
+                        self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i+padi] = self.ciUserSimulator.realUserDataActs[indSeqHead+i-1]
+                    end
+                    if indSeqHead+(opt.lstmHist-padi)-1 == self.ciUserSimulator.realUserDataEndLines[indUserSeq] then
+                        self.rnnRealUserDataPad[indUserSeq] = 1
+                        break   -- if padding tail is going to outrange this user record's tail, break
+                    end
                 end
-                indSeqHead = indSeqHead + 1
-                indSeqTail = indSeqTail + 1
+                self.rnnRealUserDataPad[indUserSeq] = 1
             else
-                indUserSeq = indUserSeq + 1 -- next user's records
-                indSeqHead = self.ciUserSimulator.realUserDataStartLines[indUserSeq]
-                indSeqTail = indSeqHead + opt.lstmHist - 1
+                if indSeqTail <= self.ciUserSimulator.realUserDataEndLines[indUserSeq] then
+                    self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
+                    self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
+                    for i=1, opt.lstmHist do
+                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
+                        self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.ciUserSimulator.realUserDataActs[indSeqHead+i-1]
+                    end
+                    indSeqHead = indSeqHead + 1
+                    indSeqTail = indSeqTail + 1
+                else
+                    indUserSeq = indUserSeq + 1 -- next user's records
+                    indSeqHead = self.ciUserSimulator.realUserDataStartLines[indUserSeq]
+                    indSeqTail = indSeqHead + opt.lstmHist - 1
+                end
             end
         end
         -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
     end
-
 
     -- retrieve parameters and gradients
     -- have to put these lines here below the gpu setting

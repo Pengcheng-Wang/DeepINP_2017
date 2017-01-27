@@ -35,8 +35,8 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     -- define model to train
     -- on the 15-class classification problem
     --
-    classes = {}
-    for i=1,2 do classes[i] = i end
+    self.classes = {}
+    for i=1,2 do self.classes[i] = i end
     self.inputFeatureNum = CIUserSimulator.realUserDataStates[1]:size()[1]
 
     if opt.network == '' then
@@ -55,7 +55,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
                 expert:add(nn.ReLU())
                 expert:add(nn.Linear(32, 24))
                 expert:add(nn.ReLU())
-                expert:add(nn.Linear(24, #classes))
+                expert:add(nn.Linear(24, #self.classes))
                 expert:add(nn.LogSoftMax())
                 experts:add(expert)
             end
@@ -83,7 +83,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             self.model:add(nn.ReLU())
             self.model:add(nn.Linear(32, 24))
             self.model:add(nn.ReLU())
-            self.model:add(nn.Linear(24, #classes))
+            self.model:add(nn.Linear(24, #self.classes))
             self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
 
@@ -92,7 +92,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             -- simple linear model: logistic regression
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
-            self.model:add(nn.Linear(self.inputFeatureNum, #classes))
+            self.model:add(nn.Linear(self.inputFeatureNum, #self.classes))
             self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
 
@@ -106,7 +106,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             lstm:remember('both')
             self.model:add(lstm)
             self.model:add(nn.NormStabilizer())
-            self.model:add(nn.Linear(opt.lstmHd, #classes))
+            self.model:add(nn.Linear(opt.lstmHd, #self.classes))
             self.model:add(nn.LogSoftMax())
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
@@ -134,13 +134,14 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     -- loss function: negative log-likelihood
     --
     self.uspCriterion = nn.ClassNLLCriterion()
-    if opt.uppModel == 'lstm' then
-        self.uspCriterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
-    end
+--    if opt.uppModel == 'lstm' then
+--        self.uspCriterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
+--    end
+    -- I'm trying to use the last output from lstm as source for backprop, so use ClassNLLCriterion for lstm
 
     self.trainEpoch = 1
     -- this matrix records the current confusion across classes
-    self.uspConfusion = optim.ConfusionMatrix(classes)
+    self.uspConfusion = optim.ConfusionMatrix(self.classes)
 
     -- log results to files
     self.uspTrainLogger = optim.Logger(paths.concat(opt.save, 'train.log'))
@@ -174,29 +175,49 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     ---
     self.rnnRealUserDataStates = {}
     self.rnnRealUserDataRewards = {}
+    self.rnnRealUserDataPad = torch.Tensor(#self.ciUserSimulator.realUserDataStartLines):fill(0)    -- indicating whether data has padding at head (should be padded)
     if opt.uppModel == 'lstm' then
         local indSeqHead = 1
         local indSeqTail = opt.lstmHist
         local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
         while indSeqTail <= #self.ciUserSimulator.realUserDataStates do
-            if indSeqTail <= self.ciUserSimulator.realUserDataEndLines[indUserSeq] then
-                self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
-                self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
-                for i=1, opt.lstmHist do
-                    self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
-                    self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.ciUserSimulator.realUserDataRewards[indSeqHead+i-1]
+            if self.rnnRealUserDataPad[indUserSeq] < 1 then
+                for padi = opt.lstmHist-1, 1, -1 do
+                    self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
+                    self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
+                    for i=1, padi do
+                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = torch.Tensor(self.ciUserSimulator.userStateFeatureCnt):fill(0) -- fill in all 0s states as dumb states
+                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.ciUserSimulator.realUserDataRewards[indSeqHead]  -- duplicate the 1st user action for padded states
+                    end
+                    for i=1, opt.lstmHist-padi do
+                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i+padi] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
+                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i+padi] = self.ciUserSimulator.realUserDataRewards[indSeqHead+i-1]
+                    end
+                    if indSeqHead+(opt.lstmHist-padi)-1 == self.ciUserSimulator.realUserDataEndLines[indUserSeq] then
+                        self.rnnRealUserDataPad[indUserSeq] = 1
+                        break   -- if padding tail is going to outrange this user record's tail, break
+                    end
                 end
-                indSeqHead = indSeqHead + 1
-                indSeqTail = indSeqTail + 1
+                self.rnnRealUserDataPad[indUserSeq] = 1
             else
-                indUserSeq = indUserSeq + 1 -- next user's records
-                indSeqHead = self.ciUserSimulator.realUserDataStartLines[indUserSeq]
-                indSeqTail = indSeqHead + opt.lstmHist - 1
+                if indSeqTail <= self.ciUserSimulator.realUserDataEndLines[indUserSeq] then
+                    self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
+                    self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
+                    for i=1, opt.lstmHist do
+                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
+                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.ciUserSimulator.realUserDataRewards[indSeqHead+i-1]
+                    end
+                    indSeqHead = indSeqHead + 1
+                    indSeqTail = indSeqTail + 1
+                else
+                    indUserSeq = indUserSeq + 1 -- next user's records
+                    indSeqHead = self.ciUserSimulator.realUserDataStartLines[indUserSeq]
+                    indSeqTail = indSeqHead + opt.lstmHist - 1
+                end
             end
         end
         -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
     end
-
 
     -- retrieve parameters and gradients
     -- have to put these lines here below the gpu setting
@@ -320,10 +341,27 @@ function CIUserScorePredictor:trainOneEpoch()
 
             -- evaluate function for complete mini batch
             local outputs = self.model:forward(inputs)
-            local f = self.uspCriterion:forward(outputs, targets)
+            local f
+            local df_do
+            local df_do_finalStep
+            local gradOutputsZeroed = {}
 
-            -- estimate df/dW
-            local df_do = self.uspCriterion:backward(outputs, targets)
+            if opt.uppModel == 'lstm' then
+                f = self.uspCriterion:forward(outputs[opt.lstmHist], targets[opt.lstmHist])
+                df_do_finalStep = self.uspCriterion:backward(outputs[opt.lstmHist], targets[opt.lstmHist])
+                for step=1, opt.lstmHist do
+                    gradOutputsZeroed[step] = torch.zeros(opt.batchSize, #self.classes)
+                    if opt.gpu_id > 0 then
+                        gradOutputsZeroed[step] = gradOutputsZeroed[step]:cuda()
+                    end
+                end
+                gradOutputsZeroed[opt.lstmHist] = df_do_finalStep
+                df_do = gradOutputsZeroed
+            else
+                f = self.uspCriterion:forward(outputs, targets)
+                df_do = self.uspCriterion:backward(outputs, targets)
+            end
+
             self.model:backward(inputs, df_do)
 
             -- penalties (L1 and L2):
@@ -341,10 +379,13 @@ function CIUserScorePredictor:trainOneEpoch()
 
             -- update self.uspConfusion
             if opt.uppModel == 'lstm' then
-                for j = 1, opt.lstmHist do
-                    for i = 1,opt.batchSize do
-                        self.uspConfusion:add(outputs[j][i], targets[j][i])
-                    end
+--                for j = 1, opt.lstmHist do
+--                    for i = 1,opt.batchSize do
+--                        self.uspConfusion:add(outputs[j][i], targets[j][i])
+--                    end
+--                end
+                for i = 1,opt.batchSize do
+                    self.uspConfusion:add(outputs[opt.lstmHist][i], targets[opt.lstmHist][i])
                 end
             else
                 for i = 1,opt.batchSize do

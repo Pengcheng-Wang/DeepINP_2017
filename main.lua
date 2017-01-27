@@ -2,11 +2,12 @@ local CIFileReader = require 'file_reader'
 local CIUserSimulator = require 'UserSimulator'
 local CIUserActsPredictor = require 'UserSimLearner/UserActsPredictor'
 local CIUserScorePredictor = require 'UserSimLearner/UserScorePredictor'
+local CIUserBehaviorGenerator = require 'UserSimLearner/UserBehaviorGenerator'
 
 torch.setdefaulttensortype('torch.FloatTensor') -- Todo: pwang8. Change this settig to coordinate with the main setup setting.
 
 opt = lapp[[
-       --trType         (default "sc")           training type : sc (score) | ac (action)
+       --trType         (default "sc")           training type : sc (score) | ac (action) | bg (behavior generation)
        -s,--save          (default "upplogs")      subdirectory to save logs
        -n,--network       (default "")          reload pretrained network
        -m,--uppModel         (default "lstm")   type of model tor train: moe | mlp | linear | lstm
@@ -23,7 +24,10 @@ opt = lapp[[
        -g,--gpu_id        (default 0)          gpu device id, 0 for using cpu
        --prepro           (default "std")       input state feature preprocessing: rsc | std
        --lstmHd           (default 192)          lstm hidden layer size
-       --lstmHist         (default 5)           lstm hist length
+       --lstmHist         (default 6)           lstm hist length
+       --ubgDir           (default "ubgModel")  directory storing uap and usp models
+       --uapFile          (default "uap.t7")          file storing userActsPredictor model
+       --uspFile          (default "usp.t7")          file storing userScorePredictor model
     ]]
 
 -- Read CI trace and survey data files, and do validation
@@ -44,6 +48,8 @@ elseif opt.trType == 'ac' then
     for i=1, 2e5 do
         CIUserActsPred:trainOneEpoch()
     end
+elseif opt.trType == 'bg' then
+    local CIUserBehaviorGen = CIUserBehaviorGenerator(CIUserModel, opt)
 end
 
 
