@@ -37,19 +37,21 @@ fr:evaluateSurveyData()
 
 -- Construct CI user simulator model using real user data
 local CIUserModel = CIUserSimulator(fr)
+local CIUserActsPred
+local CIUserScorePred
 
 if opt.trType == 'sc' then
-    local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
+    CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     for i=1, 2e5 do
         CIUserScorePred:trainOneEpoch()
     end
 elseif opt.trType == 'ac' then
-    local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
+    CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     for i=1, 2e5 do
         CIUserActsPred:trainOneEpoch()
     end
 elseif opt.trType == 'bg' then
-    local CIUserBehaviorGen = CIUserBehaviorGenerator(CIUserModel, opt)
+    local CIUserBehaviorGen = CIUserBehaviorGenerator(CIUserModel, CIUserActsPred, CIUserScorePred, opt)
 end
 
 

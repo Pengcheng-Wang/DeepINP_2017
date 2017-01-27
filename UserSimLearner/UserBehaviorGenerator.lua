@@ -19,7 +19,8 @@ local TableSet = require 'MyMisc.TableSetMisc'
 
 local CIUserBehaviorPredictor = classic.class('UserBehaviorPredictor')
 
-function CIUserBehaviorPredictor:_init(CIUserSimulator, opt)
+function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserScorePred, opt)
+    print('#', paths.concat(opt.ubgDir , opt.uapFile))
     self.userActsPred = torch.load(paths.concat(opt.ubgDir , opt.uapFile))
     self.userScorePred = torch.load(paths.concat(opt.ubgDir , opt.uspFile))
     self.userActsPred:evaluate()
@@ -30,13 +31,14 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, opt)
         userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 2] = 5
         userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 3] = 9
 
-        local prepStates = CIUserSimulator:preprocessUserStateData(userStates, opt.prepro)
+        local prepStates = CIUserSimulator:preprocessUserStateData(torch.Tensor(CIUserSimulator.userStateFeatureCnt):fill(0), opt.prepro)
         local inPrepStates = torch.Tensor(1, CIUserSimulator.userStateFeatureCnt)
         inPrepStates[1] = prepStates:clone()
         local tabPrepStates = {}
-        for i=1, 6 do
-            tabPrepStates[i] = inPrepStates
+        for i=1, 5 do
+            tabPrepStates[i] = CIUserSimulator:preprocessUserStateData(userStates, opt.prepro)
         end
+        tabPrepStates[6] = inPrepStates
 
         local nll_acts = self.userActsPred:forward(tabPrepStates)
         lp, ain = torch.max(nll_acts[6]:squeeze(), 1)
@@ -57,34 +59,37 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, opt)
         local earlyTotAct = 0
         local earlyCrcAct = 0
         for i=1, #CIUserSimulator.realUserDataStates do
-            local userState = CIUserSimulator:preprocessUserStateData(CIUserSimulator.realUserDataStates[i], opt.prepro)
-            local userAct = CIUserSimulator.realUserDataActs[i]
-            local userRew = CIUserSimulator.realUserDataRewards[i]
+            local userState = CIUserActsPred.rnnRealUserDataStates[i]
+            local userAct = CIUserActsPred.rnnRealUserDataActs[i]
+            local userRew = CIUserScorePred.rnnRealUserDataRewards[i]
 
-            local prepUserState = torch.Tensor(1, CIUserSimulator.userStateFeatureCnt)
-            prepUserState[1] = userState:clone()
             local tabState = {}
-            tabState[1] = prepUserState
+            for j=1, opt.lstmHist do
+                local prepUserState = torch.Tensor(1, CIUserSimulator.userStateFeatureCnt)
+                prepUserState[1] = CIUserSimulator:preprocessUserStateData(userState[j], opt.prepro)
+                tabState[j] = prepUserState:clone()
+            end
+
             local nll_acts = self.userActsPred:forward(tabState)
-            lp, ain = torch.max(nll_acts[1]:squeeze(), 1)
-            if ain[1] == userAct then crcActCnt = crcActCnt + 1 end
+            lp, ain = torch.max(nll_acts[opt.lstmHist]:squeeze(), 1)
+            if ain[1] == userAct[opt.lstmHist] then crcActCnt = crcActCnt + 1 end
 
             if i == CIUserSimulator.realUserDataEndLines[userInd] then
                 userInd = userInd+1
-            elseif i == CIUserSimulator.realUserDataStartLines[userInd]+8 and i <= CIUserSimulator.realUserDataEndLines[userInd] then
-                if ain[1] == userAct then
+            elseif i == CIUserSimulator.realUserDataStartLines[userInd] and i <= CIUserSimulator.realUserDataEndLines[userInd] then
+                if ain[1] == userAct[opt.lstmHist] then
                     earlyCrcAct = earlyCrcAct + 1
                 end
                 earlyTotAct = earlyTotAct + 1
             end
 
             local nll_rewards = self.userScorePred:forward(tabState)
-            lp, rin = torch.max(nll_rewards[1]:squeeze(), 1)
-            if userAct == CIUserSimulator.CIFr.usrActInd_end and rin[1] == userRew then crcRewCnt = crcRewCnt + 1 end
+            lp, rin = torch.max(nll_rewards[opt.lstmHist]:squeeze(), 1)
+            if userAct[opt.lstmHist] == CIUserSimulator.CIFr.usrActInd_end and rin[1] == userRew[opt.lstmHist] then crcRewCnt = crcRewCnt + 1 end
 
             tltCnt = tltCnt + 1
 
-            if userAct == CIUserSimulator.CIFr.usrActInd_end then
+            if userAct[opt.lstmHist] == CIUserSimulator.CIFr.usrActInd_end then
                 self.userActsPred:forget()
                 self.userScorePred:forget()
             end
