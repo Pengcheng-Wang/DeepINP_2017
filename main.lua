@@ -4,8 +4,6 @@ local CIUserActsPredictor = require 'UserSimLearner/UserActsPredictor'
 local CIUserScorePredictor = require 'UserSimLearner/UserScorePredictor'
 local CIUserBehaviorGenerator = require 'UserSimLearner/UserBehaviorGenerator'
 
-torch.setdefaulttensortype('torch.FloatTensor') -- Todo: pwang8. Change this settig to coordinate with the main setup setting.
-
 opt = lapp[[
        --trType         (default "sc")           training type : sc (score) | ac (action) | bg (behavior generation)
        -s,--save          (default "upplogs")      subdirectory to save logs
@@ -30,6 +28,10 @@ opt = lapp[[
        --uspFile          (default "usp.t7")          file storing userScorePredictor model
     ]]
 
+-- threads and default tensor type
+torch.setnumthreads(opt.threads)
+torch.setdefaulttensortype('torch.FloatTensor')
+
 -- Read CI trace and survey data files, and do validation
 local fr = CIFileReader()
 fr:evaluateTraceFile()
@@ -39,18 +41,18 @@ fr:evaluateSurveyData()
 local CIUserModel = CIUserSimulator(fr)
 
 if opt.trType == 'sc' then
-    local CIUserScorePred = CIUserActsPredictor(CIUserModel, opt)
+    local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     for i=1, 2e5 do
         CIUserScorePred:trainOneEpoch()
     end
 elseif opt.trType == 'ac' then
-    local CIUserActsPred = CIUserScorePredictor(CIUserModel, opt)
+    local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     for i=1, 2e5 do
         CIUserActsPred:trainOneEpoch()
     end
 elseif opt.trType == 'bg' then
-    local CIUserActsPred = CIUserScorePredictor(CIUserModel, opt)
-    local CIUserScorePred = CIUserActsPredictor(CIUserModel, opt)
+    local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
+    local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     local CIUserBehaviorGen = CIUserBehaviorGenerator(CIUserModel, CIUserActsPred, CIUserScorePred, opt)
 end
 

@@ -27,8 +27,8 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserSc
 
     if opt.uppModel == 'lstm' then
         local userStates = torch.Tensor(CIUserSimulator.userStateFeatureCnt):fill(0)
-        userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 1] = 0
-        userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 2] = 5
+        userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 1] = 1
+        userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 2] = 1
         userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 3] = 9
 
         local prepStates = CIUserSimulator:preprocessUserStateData(torch.Tensor(CIUserSimulator.userStateFeatureCnt):fill(0), opt.prepro)
@@ -36,11 +36,14 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserSc
         inPrepStates[1] = prepStates:clone()
         local tabPrepStates = {}
         for i=1, 5 do
-            tabPrepStates[i] = CIUserSimulator:preprocessUserStateData(userStates, opt.prepro)
+            tabPrepStates[i] = inPrepStates:clone()
         end
-        tabPrepStates[6] = inPrepStates
+        local lstTimeState = torch.Tensor(1, CIUserSimulator.userStateFeatureCnt)
+        lstTimeState[1] = CIUserSimulator:preprocessUserStateData(userStates, opt.prepro)
+        tabPrepStates[6] = lstTimeState
 
         local nll_acts = self.userActsPred:forward(tabPrepStates)
+        print('@@@', nll_acts[6]:squeeze())
         lp, ain = torch.max(nll_acts[6]:squeeze(), 1)
         print('##', lp, ain)
 
@@ -56,9 +59,9 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserSc
         local crcActCnt = 0
         local crcRewCnt = 0
         local userInd = 1
-        local earlyTotAct = 0
-        local earlyCrcAct = 0
-        for i=1, #CIUserSimulator.realUserDataStates do
+        local earlyTotAct = torch.Tensor(opt.lstmHist+81):fill(1e-6)
+        local earlyCrcAct = torch.Tensor(opt.lstmHist+81):fill(0)
+        for i=1, #CIUserActsPred.rnnRealUserDataStates do
             local userState = CIUserActsPred.rnnRealUserDataStates[i]
             local userAct = CIUserActsPred.rnnRealUserDataActs[i]
             local userRew = CIUserScorePred.rnnRealUserDataRewards[i]
@@ -72,15 +75,26 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserSc
 
             local nll_acts = self.userActsPred:forward(tabState)
             lp, ain = torch.max(nll_acts[opt.lstmHist]:squeeze(), 1)
-            if ain[1] == userAct[opt.lstmHist] then crcActCnt = crcActCnt + 1 end
-
-            if i == CIUserSimulator.realUserDataEndLines[userInd] then
-                userInd = userInd+1
-            elseif i == CIUserSimulator.realUserDataStartLines[userInd] and i <= CIUserSimulator.realUserDataEndLines[userInd] then
-                if ain[1] == userAct[opt.lstmHist] then
-                    earlyCrcAct = earlyCrcAct + 1
+--            if ain[1] == userAct[opt.lstmHist] then crcActCnt = crcActCnt + 1 end
+            lpy, lps = torch.sort(nll_acts[opt.lstmHist]:squeeze(), 1, true)
+            local crtExt = false
+            local smpLen = 5
+            for l=1, smpLen do
+                if lps[l] == userAct[opt.lstmHist] then
+                    crcActCnt = crcActCnt + 1
+                    crtExt = true
                 end
-                earlyTotAct = earlyTotAct + 1
+            end
+
+            local indDiff = i - CIUserActsPred.rnnRealUserDataStarts[userInd]
+            if indDiff >= 0 and indDiff <= opt.lstmHist+80 and i <= CIUserActsPred.rnnRealUserDataEnds[userInd] then
+                if crtExt then  --ain[1] == userAct[opt.lstmHist] then
+                    earlyCrcAct[indDiff+1] = earlyCrcAct[indDiff+1] + 1
+                end
+            earlyTotAct[indDiff+1] = earlyTotAct[indDiff+1] + 1
+            end
+            if i == CIUserActsPred.rnnRealUserDataEnds[userInd] then
+                userInd = userInd+1
             end
 
             local nll_rewards = self.userScorePred:forward(tabState)
@@ -96,11 +110,11 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserSc
 
         end
 
-        print('###', crcActCnt/tltCnt, crcRewCnt/402, earlyCrcAct/earlyTotAct)
+        print('###', crcActCnt/tltCnt, crcRewCnt/#CIUserActsPred.rnnRealUserDataEnds, torch.cdiv(earlyCrcAct, earlyTotAct))
 
         os.exit()
     else
-        print('ttt')
+        print('This part of the evaluation code does not have to be correct. I have not carefully checked it.')
         local userStates = torch.Tensor(CIUserSimulator.userStateFeatureCnt):fill(0)
         userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 1] = 0
         userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 2] = 5

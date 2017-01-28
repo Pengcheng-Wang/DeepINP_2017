@@ -23,8 +23,6 @@ local CIUserScorePredictor = classic.class('UserScorePredictor')
 
 function CIUserScorePredictor:_init(CIUserSimulator, opt)
 
-    -- threads
-    torch.setnumthreads(opt.threads)
     -- batch size?
     if opt.optimization == 'LBFGS' and opt.batchSize < 100 then
         error('LBFGS should not be used with small mini-batches; 1000 is recommended')
@@ -175,6 +173,8 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     ---
     self.rnnRealUserDataStates = {}
     self.rnnRealUserDataRewards = {}
+    self.rnnRealUserDataStarts = {}
+    self.rnnRealUserDataEnds = {}
     self.rnnRealUserDataPad = torch.Tensor(#self.ciUserSimulator.realUserDataStartLines):fill(0)    -- indicating whether data has padding at head (should be padded)
     if opt.uppModel == 'lstm' then
         local indSeqHead = 1
@@ -193,6 +193,9 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
                         self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i+padi] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
                         self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i+padi] = self.ciUserSimulator.realUserDataRewards[indSeqHead+i-1]
                     end
+                    if padi == opt.lstmHist-1 then
+                        self.rnnRealUserDataStarts[#self.rnnRealUserDataStarts+1] = #self.rnnRealUserDataStates     -- This is the start of a user's record
+                    end
                     if indSeqHead+(opt.lstmHist-padi)-1 == self.ciUserSimulator.realUserDataEndLines[indUserSeq] then
                         self.rnnRealUserDataPad[indUserSeq] = 1
                         break   -- if padding tail is going to outrange this user record's tail, break
@@ -210,12 +213,14 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
                     indSeqHead = indSeqHead + 1
                     indSeqTail = indSeqTail + 1
                 else
+                    self.rnnRealUserDataEnds[#self.rnnRealUserDataEnds+1] = #self.rnnRealUserDataStates     -- This is the end of a user's record
                     indUserSeq = indUserSeq + 1 -- next user's records
                     indSeqHead = self.ciUserSimulator.realUserDataStartLines[indUserSeq]
                     indSeqTail = indSeqHead + opt.lstmHist - 1
                 end
             end
         end
+        self.rnnRealUserDataEnds[#self.rnnRealUserDataEnds+1] = #self.rnnRealUserDataStates     -- Set the end of the last user's record
         -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
     end
 
