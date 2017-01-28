@@ -43,13 +43,13 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserSc
         tabPrepStates[6] = lstTimeState
 
         local nll_acts = self.userActsPred:forward(tabPrepStates)
-        print('@@@', nll_acts[6]:squeeze())
+        print('@@@', nll_acts[6]:squeeze(), '\n$#$', torch.exp(nll_acts[6]:squeeze()))
         lp, ain = torch.max(nll_acts[6]:squeeze(), 1)
         print('##', lp, ain)
 
         local st = torch.Tensor(15):fill(0)
         for k, v in ipairs(CIUserSimulator.realUserDataStartLines) do
-            st[CIUserSimulator.realUserDataActs[v]] = st[CIUserSimulator.realUserDataActs[v]] +1
+            st[CIUserSimulator.realUserDataActs[v+4]] = st[CIUserSimulator.realUserDataActs[v+4]] +1 -- check act dist at each x-th time step
         end
         print('Act count', st)
 
@@ -61,6 +61,7 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserSc
         local userInd = 1
         local earlyTotAct = torch.Tensor(opt.lstmHist+81):fill(1e-6)
         local earlyCrcAct = torch.Tensor(opt.lstmHist+81):fill(0)
+        local firstActDist = torch.Tensor(15):fill(0)
         for i=1, #CIUserActsPred.rnnRealUserDataStates do
             local userState = CIUserActsPred.rnnRealUserDataStates[i]
             local userAct = CIUserActsPred.rnnRealUserDataActs[i]
@@ -75,10 +76,11 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserSc
 
             local nll_acts = self.userActsPred:forward(tabState)
             lp, ain = torch.max(nll_acts[opt.lstmHist]:squeeze(), 1)
+            if i == CIUserActsPred.rnnRealUserDataStarts[userInd]+4 then firstActDist[ain[1]] = firstActDist[ain[1]]+1 end   -- check act dist at each x-th time step
 --            if ain[1] == userAct[opt.lstmHist] then crcActCnt = crcActCnt + 1 end
             lpy, lps = torch.sort(nll_acts[opt.lstmHist]:squeeze(), 1, true)
             local crtExt = false
-            local smpLen = 5
+            local smpLen = 1
             for l=1, smpLen do
                 if lps[l] == userAct[opt.lstmHist] then
                     crcActCnt = crcActCnt + 1
@@ -110,6 +112,7 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserSc
 
         end
 
+        print('1st act: ', firstActDist)
         print('###', crcActCnt/tltCnt, crcRewCnt/#CIUserActsPred.rnnRealUserDataEnds, torch.cdiv(earlyCrcAct, earlyTotAct))
 
         os.exit()
