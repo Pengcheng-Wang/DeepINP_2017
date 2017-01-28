@@ -54,6 +54,7 @@ elseif opt.trType == 'bg' then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     local CIUserBehaviorGen = CIUserBehaviorGenerator(CIUserModel, CIUserActsPred, CIUserScorePred, opt)
+    CIUserBehaviorGen:sampleOneTraj()
 end
 
 

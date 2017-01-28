@@ -46,6 +46,13 @@ function CIFileReader:_init(opt)
     self.usrStateFeatureInd_BryceSymp = 16
     self.usrStateFeatureInd_WorksheetLevel = 17
     self.usrStateFeatureInd_PresentQuiz = 18
+
+    -- Adaptation type index
+    self.ciAdp_TeresaSymp = 1
+    self.ciAdp_BryceSymp = 2
+    self.ciAdp_WorksheetLevel = 3
+    self.ciAdp_PresentQuiz = 4
+
     -- Read data from CSV to tensor
     local traceFile = io.open(self.traceFilePath, 'r')
 --    local header = traceFile:read()

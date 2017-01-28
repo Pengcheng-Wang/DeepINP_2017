@@ -164,4 +164,34 @@ function CIUserSimulator:preprocessUserStateData(obvUserData, ppType)
 
 end
 
+--- Check if narrative adaptation point will be triggered
+--  Notice: the curState should be raw state values, not preprocessed values
+function CIUserSimulator:isAdpTriggered(curState, act)
+    -- curState should be a 1d or 2d tensor. If it is
+    -- 2d, I assume the 1st dim is batch dimension
+    assert(curState:dim() == 1 or curState:dim() == 2)
+    local stateRef = curState
+    if curState:dim() == 2 then stateRef = curState[1] end
+
+    if act == self.CIFr.usrActInd_askTeresaSymp then
+        return true, self.CIFr.ciAdp_TeresaSymp
+    elseif act == self.CIFr.usrActInd_askBryceSymp then
+        return true, self.CIFr.ciAdp_BryceSymp
+    elseif act == self.CIFr.usrActInd_talkQuentin and
+            curState[self.CIFr.usrActInd_KimLetQuentinRevealActOne] < 1 and
+            curState[self.CIFr.usrActInd_talkQuentin] < 1 then
+        return true, self.CIFr.ciAdp_PresentQuiz
+    elseif act == self.CIFr.usrActInd_talkRobert and
+            curState[self.CIFr.usrActInd_talkRobert] < 1 then
+        return true, self.CIFr.ciAdp_PresentQuiz
+    elseif act == self.CIFr.usrActInd_talkFord and
+            curState[self.CIFr.usrActInd_talkFord] < 1 then
+        return true, self.CIFr.ciAdp_PresentQuiz
+    elseif act == self.CIFr.usrActInd_submitWorksheet then
+        return true, self.CIFr.ciAdp_WorksheetLevel
+    end
+
+    return false, 0
+end
+
 return CIUserSimulator
