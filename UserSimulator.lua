@@ -166,32 +166,96 @@ end
 
 --- Check if narrative adaptation point will be triggered
 --  Notice: the curState should be raw state values, not preprocessed values
-function CIUserSimulator:isAdpTriggered(curState, act)
+--  Attention: This act param is user's action, not RL agent's adp action
+function CIUserSimulator:isAdpTriggered(curState, userAct)
     -- curState should be a 1d or 2d tensor. If it is
     -- 2d, I assume the 1st dim is batch dimension
     assert(curState:dim() == 1 or curState:dim() == 2)
     local stateRef = curState
     if curState:dim() == 2 then stateRef = curState[1] end
 
-    if act == self.CIFr.usrActInd_askTeresaSymp then
+    if userAct == self.CIFr.usrActInd_askTeresaSymp then
         return true, self.CIFr.ciAdp_TeresaSymp
-    elseif act == self.CIFr.usrActInd_askBryceSymp then
+    elseif userAct == self.CIFr.usrActInd_askBryceSymp then
         return true, self.CIFr.ciAdp_BryceSymp
-    elseif act == self.CIFr.usrActInd_talkQuentin and
+    elseif userAct == self.CIFr.usrActInd_talkQuentin and
             curState[self.CIFr.usrActInd_KimLetQuentinRevealActOne] < 1 and
             curState[self.CIFr.usrActInd_talkQuentin] < 1 then
         return true, self.CIFr.ciAdp_PresentQuiz
-    elseif act == self.CIFr.usrActInd_talkRobert and
+    elseif userAct == self.CIFr.usrActInd_talkRobert and
             curState[self.CIFr.usrActInd_talkRobert] < 1 then
         return true, self.CIFr.ciAdp_PresentQuiz
-    elseif act == self.CIFr.usrActInd_talkFord and
+    elseif userAct == self.CIFr.usrActInd_talkFord and
             curState[self.CIFr.usrActInd_talkFord] < 1 then
         return true, self.CIFr.ciAdp_PresentQuiz
-    elseif act == self.CIFr.usrActInd_submitWorksheet then
+    elseif userAct == self.CIFr.usrActInd_submitWorksheet then
         return true, self.CIFr.ciAdp_WorksheetLevel
     end
 
     return false, 0
+end
+
+
+--- Apply user action on state representation
+--  Attention: isAdpTriggered() should be called
+--  before this function. (Verification of adaptation should be before applying user action's effect)
+--  Attention: This act param is user's action, not RL agent's adp action
+function CIUserSimulator:applyUserActOnState(curState, userAct)
+    -- curState should be a 1d or 2d tensor. If it is
+    -- 2d, I assume the 1st dim is batch dimension
+    assert(userAct >= self.CIFr.usrActInd_posterRead and userAct <= self.CIFr.usrActInd_end)
+    assert(curState:dim() == 1 or curState:dim() == 2 or curState:dim() == 3)
+    local stateRef = curState
+    if curState:dim() == 2 then
+        stateRef = curState[1]
+    elseif curState:dim() == 3 then
+        stateRef = curState[1][1]
+    end
+
+    -- Add 1 to corresponding state features
+    stateRef[userAct] = stateRef[userAct] + 1
+
+    -- For indices 12, 13, 14, state feature values can only be 0 or 1
+    if stateRef[self.CIFr.usrActInd_BryceRevealActOne] > 1 then
+        stateRef[self.CIFr.usrActInd_BryceRevealActOne] = 1
+    end
+    if stateRef[self.CIFr.usrActInd_QuentinRevealActOne] > 1 then
+        stateRef[self.CIFr.usrActInd_QuentinRevealActOne] = 1
+    end
+    if stateRef[self.CIFr.usrActInd_KimLetQuentinRevealActOne] > 1 then
+        stateRef[self.CIFr.usrActInd_KimLetQuentinRevealActOne] = 1
+    end
+
+    return curState
+end
+
+
+--- Apply RL agent Adaptation action on state representation
+--  Attention: This act param is RL agent's action, not user's action
+function CIUserSimulator:applyAdpActOnState(curState, adpType, adpAct)
+    -- curState should be a 1d or 2d tensor. If it is
+    -- 2d, I assume the 1st dim is batch dimension
+    assert(curState:dim() == 1 or curState:dim() == 2)
+    local stateRef = curState
+    if curState:dim() == 2 then
+        stateRef = curState[1]
+    end
+
+    if adpType == self.CIFr.ciAdp_TeresaSymp then
+        stateRef[self.CIFr.usrStateFeatureInd_TeresaSymp] =
+        (4 - adpAct) / 3.0  -- (act1--1.0, act3--0.33). So y=(4-x)/3. Act: 1-3
+    elseif adpType == self.CIFr.ciAdp_BryceSymp then
+        stateRef[self.CIFr.usrStateFeatureInd_BryceSymp] =
+        (3 - (adpAct - self.CIFr.ciAdpActRange_BryceSymp[1]+1)) / 2.0  -- (act1--1.0, act2--0.5). So y=(3-x)/2. Act: 4-5
+    elseif adpType == self.CIFr.ciAdp_PresentQuiz then
+        stateRef[self.CIFr.usrStateFeatureInd_PresentQuiz] =
+        (2 - (adpAct - self.CIFr.ciAdpActRange_PresentQuiz[1]+1))  -- act1-quiz-1.0, act2-no_quiz-0. y=2-x. Act: 9-10
+    elseif adpType == self.CIFr.ciAdp_WorksheetLevel then
+        stateRef[self.CIFr.usrStateFeatureInd_WorksheetLevel] =
+        ((adpAct - self.CIFr.ciAdpActRange_WorksheetLevel[1]+1) / 3.0)  -- act1-0.33, act3-1. y=x/3. Act: 6-8
+    end
+
+    return curState
 end
 
 return CIUserSimulator

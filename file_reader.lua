@@ -48,10 +48,16 @@ function CIFileReader:_init(opt)
     self.usrStateFeatureInd_PresentQuiz = 18
 
     -- Adaptation type index
-    self.ciAdp_TeresaSymp = 1
-    self.ciAdp_BryceSymp = 2
-    self.ciAdp_WorksheetLevel = 3
-    self.ciAdp_PresentQuiz = 4
+    self.ciAdp_TeresaSymp = 1 -- 3 acts. (1-3) act-1: max detail, act-2: moderate detail, act-3: minimal detail. (act1--1.0, act3--0.33). So y=(4-x)/3
+    self.ciAdp_BryceSymp = 2 -- 2 acts. (4-5) act-1: moderate detail, act-2: minimal detail. (act1--1.0, act2--0.5). So y=(3-x)/2
+    self.ciAdp_WorksheetLevel = 3 -- 3 acts. (6-8) act-1: minimal detail, act-2: moderate detail, act-3: maximal detail. (act1-0.33, act3-1). y=x/3
+    self.ciAdp_PresentQuiz = 4 -- 2 acts. (9-10) act-1: quiz, act-2: no-quiz. (act1-quiz-1.0, act2-no_quiz-0). y=2-x
+
+    self.ciAdpActRange_TeresaSymp = {1,3} -- 3 acts. (1-3) act-1: max detail, act-2: moderate detail, act-3: minimal detail. (act1--1.0, act3--0.33). So y=(4-x)/3
+    self.ciAdpActRange_BryceSymp = {4,5} -- 2 acts. (4-5) act-1: moderate detail, act-2: minimal detail. (act1--1.0, act2--0.5). So y=(3-x)/2
+    self.ciAdpActRange_WorksheetLevel = {6,8} -- 3 acts. (6-8) act-1: minimal detail, act-2: moderate detail, act-3: maximal detail. (act1-0.33, act3-1). y=x/3
+    self.ciAdpActRange_PresentQuiz = {9,10} -- 2 acts. (9-10) act-1: quiz, act-2: no-quiz. (act1-quiz-1.0, act2-no_quiz-0). y=2-x
+    self.ciAdpActRanges = {self.ciAdpActRange_TeresaSymp, self.ciAdpActRange_BryceSymp, self.ciAdpActRange_WorksheetLevel, self.ciAdpActRange_PresentQuiz}
 
     -- Read data from CSV to tensor
     local traceFile = io.open(self.traceFilePath, 'r')

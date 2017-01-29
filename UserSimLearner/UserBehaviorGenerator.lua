@@ -34,8 +34,8 @@ function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserSc
     if opt.uppModel == 'lstm' then
         local userStates = torch.Tensor(CIUserSimulator.userStateFeatureCnt):fill(0)
         userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 1] = 1
-        userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 2] = 1
-        userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 3] = 9
+        userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 2] = 0.6
+        userStates[CIUserSimulator.CIFr.userStateGamePlayFeatureCnt + 3] = 0.3
 
         local prepStates = CIUserSimulator:preprocessUserStateData(torch.Tensor(CIUserSimulator.userStateFeatureCnt):fill(0), opt.prepro)
         local inPrepStates = torch.Tensor(1, CIUserSimulator.userStateFeatureCnt)
@@ -197,31 +197,79 @@ end
 --- directly sampled from simulated model from the highest ranked action.
 function CIUserBehaviorPredictor:sampleOneTraj()
     -- Right now, only lstm based action/score prediction model is supported
---    print('@#@#@', self.CIUap.rnnRealUserDataStarts, '@@', self.CIUSim.realUserDataStartLines)
-    local realDataStartsCnt = #self.CIUap.rnnRealUserDataStarts
+    local realDataStartsCnt = #self.CIUap.rnnRealUserDataStarts     -- count the number of real users
     local rndStartInd
     --- randomly select one human user's record whose 1st action cannot be ending action
     repeat
         rndStartInd = torch.random(1, realDataStartsCnt)
     until self.CIUap.rnnRealUserDataActs[self.CIUap.rnnRealUserDataStarts[rndStartInd]][self.opt.lstmHist] ~= self.CIUSim.CIFr.usrActInd_end
 
-    --- Get this user's state record at the 1st time stpe. This process means we sampel
+    --- Get this user's state record at the 1st time stpe. This process means we sample
     --  user's 1st action and survey data from human user's records. Then we use our prediction
     --  model to estimate user's future ations.
     local curRnnStatesRaw = self.CIUap.rnnRealUserDataStates[self.CIUap.rnnRealUserDataStarts[rndStartInd]]     -- sample the 1st state
-    local curRnnAct = self.CIUap.rnnRealUserDataActs[self.CIUap.rnnRealUserDataStarts[rndStartInd]][self.opt.lstmHist] -- sample the 1st action (at last time step)
+    local curRnnUserAct = self.CIUap.rnnRealUserDataActs[self.CIUap.rnnRealUserDataStarts[rndStartInd]][self.opt.lstmHist] -- sample the 1st action (at last time step)
     local adpTriggered = false
-    local adpType = 0  -- should range from 1 to 4
+    local adpType = 0  -- valid type value should range from 1 to 4
+    local rlStateRaw = torch.Tensor(1, 1, self.CIUSim.userStateFeatureCnt):fill(0)   -- this state should be 3d
+    local rlStatePrep = torch.Tensor(1, 1, self.CIUSim.userStateFeatureCnt):fill(0)   -- this state should be 3d
+    local nextSingleStepStateRaw
 
-    local tabRnnStateRaw = {}   -- raw state value, used for updating future states according to current actions
+    local tabRnnStateRaw = {}   -- raw state value, used for updating future states according to current actions. This is state for user act/score prediction nn, not for rl
     for j=1, opt.lstmHist do
         local sinStepUserState = torch.Tensor(1, self.CIUSim.userStateFeatureCnt)
         sinStepUserState[1] = curRnnStatesRaw[j]
         tabRnnStateRaw[j] = sinStepUserState:clone()
     end
 
-    adpTriggered, adpType = self.CIUSim:isAdpTriggered(tabRnnStateRaw[self.opt.lstmHist], curRnnAct)    -- Todo: pwang8. Should fake some adp action later for testing
-print(adpTriggered, adpType) os.exit()
+    -- This is the state representation for next single time step
+    nextSingleStepStateRaw = tabRnnStateRaw[self.opt.lstmHist]:clone()
+
+    -- When user ap/sp state and action were given, check if adaptation could be triggered
+    adpTriggered, adpType = self.CIUSim:isAdpTriggered(tabRnnStateRaw[self.opt.lstmHist], curRnnUserAct)
+print('1st time step state:') for k,v in ipairs(tabRnnStateRaw) do print(k,v) end
+print('1st time step act:', curRnnUserAct)
+    -- Attention: the state value for RL is not the same as it is for user action prediction
+    if adpTriggered then
+print('Adp triggered')
+        rlStateRaw[1][1] = tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
+
+        -- Need to add the user action's effect into this representation
+        self.CIUSim:applyUserActOnState(rlStateRaw, curRnnUserAct)
+        rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
+print('After apply user act', rlStateRaw[1][1])
+print('Prep rl state', rlStatePrep[1][1])
+        -- Should get action choice from the RL agent here
+        -- Right now, generate a fake RL-adp action
+        local rndAdpAct = torch.random(self.CIUSim.CIFr.ciAdpActRanges[adpType][1], self.CIUSim.CIFr.ciAdpActRanges[adpType][2])
+print('## Adaptation triggered for type', adpType, 'Random act choice: ', rndAdpAct)
+
+        -- Apply rl adp action onto user's single time step state
+        self.CIUSim:applyAdpActOnState(nextSingleStepStateRaw, adpType, rndAdpAct)
+print('Next single step state raw', nextSingleStepStateRaw)
+        -- Todo: pwang8.Should check if state calculation is correct
+    end
+
+    -- apply user's action onto raw state representation
+    self.CIUSim:applyUserActOnState(nextSingleStepStateRaw, curRnnUserAct)
+
+    -- reconstruct rnn state table for next time step
+    for j=1, opt.lstmHist-1 do
+        tabRnnStateRaw[j] = tabRnnStateRaw[j+1]:clone()
+    end
+    tabRnnStateRaw[opt.lstmHist] = nextSingleStepStateRaw:clone()
+print('2nd time step state:') for k,v in ipairs(tabRnnStateRaw) do print(k,v) end
+
+    -- Pick an action using the action prediction model
+    local nll_acts = self.userActsPred:forward(tabRnnStateRaw)
+print('@@@', nll_acts[6]:squeeze(), '\n$#$', torch.exp(nll_acts[6]:squeeze()))
+    lp, ain = torch.max(nll_acts[6]:squeeze(), 1)
+    curRnnUserAct = ain
+print('2nd time step act:', curRnnUserAct)
+
+os.exit()
+    -- Todo:pwang8. roll it back to the table representation of rnnStateRaw representation
+
     local tabRnnStatePrep = {}  -- states after preprocessing
     for j=1, opt.lstmHist do
         local prepSinStepState = torch.Tensor(1, self.CIUSim.userStateFeatureCnt)
