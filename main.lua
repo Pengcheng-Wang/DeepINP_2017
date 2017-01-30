@@ -26,6 +26,7 @@ opt = lapp[[
        --ubgDir           (default "ubgModel")  directory storing uap and usp models
        --uapFile          (default "uap.t7")          file storing userActsPredictor model
        --uspFile          (default "usp.t7")          file storing userScorePredictor model
+       --actSmpLen        (default 6)           The sampling candidate list length for user action generation
     ]]
 
 -- threads and default tensor type

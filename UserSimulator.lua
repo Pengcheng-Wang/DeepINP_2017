@@ -36,8 +36,8 @@ function CIUserSimulator:_init(CIFileReader)
             self.realUserDataActs[#self.realUserDataStates] = act
 --            print('#', userId, self.realUserDataStates[#self.realUserDataStates], ',', self.realUserDataActs[#self.realUserDataStates])
 
-            if CIFileReader.surveyData[userId][CIFileReader.userStateSurveyFeatureCnt+1] > 0 then
-                self.realUserDataRewards[#self.realUserDataStates] = 1
+            if CIFileReader.surveyData[userId][CIFileReader.userStateSurveyFeatureCnt+1] > 0.16666667 then  -- above median nlg
+                self.realUserDataRewards[#self.realUserDataStates] = 1  -- pos nlg: class_1, neg or 0 nlg: class_2
             else
                 self.realUserDataRewards[#self.realUserDataStates] = 2     -- This is (binary) reward class label, not reward value
             end
@@ -179,14 +179,14 @@ function CIUserSimulator:isAdpTriggered(curState, userAct)
     elseif userAct == self.CIFr.usrActInd_askBryceSymp then
         return true, self.CIFr.ciAdp_BryceSymp
     elseif userAct == self.CIFr.usrActInd_talkQuentin and
-            curState[self.CIFr.usrActInd_KimLetQuentinRevealActOne] < 1 and
-            curState[self.CIFr.usrActInd_talkQuentin] < 1 then
+            stateRef[self.CIFr.usrActInd_KimLetQuentinRevealActOne] < 1 and
+            stateRef[self.CIFr.usrActInd_talkQuentin] < 1 then
         return true, self.CIFr.ciAdp_PresentQuiz
     elseif userAct == self.CIFr.usrActInd_talkRobert and
-            curState[self.CIFr.usrActInd_talkRobert] < 1 then
+            stateRef[self.CIFr.usrActInd_talkRobert] < 1 then
         return true, self.CIFr.ciAdp_PresentQuiz
     elseif userAct == self.CIFr.usrActInd_talkFord and
-            curState[self.CIFr.usrActInd_talkFord] < 1 then
+            stateRef[self.CIFr.usrActInd_talkFord] < 1 then
         return true, self.CIFr.ciAdp_PresentQuiz
     elseif userAct == self.CIFr.usrActInd_submitWorksheet then
         return true, self.CIFr.ciAdp_WorksheetLevel
