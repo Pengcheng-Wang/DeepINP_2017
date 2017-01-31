@@ -198,6 +198,57 @@ function CIUserBehaviorPredictor:getStateSpec()
 end
 
 
+--- This function calculates and sets self.curRnnUserAct, which is the predicted
+--  user action according to current tabRnnStatePrep value
+function CIUserBehaviorPredictor:_calcUserAct()
+    -- Pick an action using the action prediction model
+    self.userActsPred:forget()
+    local nll_acts = self.userActsPred:forward(self.tabRnnStatePrep)[self.opt.lstmHist]:squeeze() -- get act choice output for last time step
+
+    --        print('Action choice likelihood Next time step:\n', torch.exp(nll_acts))
+    local lpy   -- log likelihood value
+    local lps   -- sorted index in desendent-order
+    lpy, lps = torch.sort(nll_acts, 1, true)
+    lpy = torch.exp(lpy)
+    lpy = torch.cumsum(lpy)
+    local actSampleLen = self.opt.actSmpLen
+    lpy = torch.div(lpy, lpy[actSampleLen])
+    local greedySmpThres = 0.75
+
+    if self.timeStepCnt == 2 then
+        greedySmpThres = 0.1
+    elseif self.timeStepCnt == 3 then
+        greedySmpThres = 0.3
+    elseif self.timeStepCnt == 4 then
+        greedySmpThres = 0.5
+    end
+
+    self.curRnnUserAct = lps[1]  -- the action result given by the action predictor
+    if torch.uniform() > greedySmpThres then
+        -- sample according to classifier output
+        local rndActPick = torch.uniform()
+        for i=1, actSampleLen do
+            if rndActPick <= lpy[i] then
+                self.curRnnUserAct = lps[i]
+                break
+            end
+        end
+    end
+
+    return self.curRnnUserAct
+end
+
+
+function CIUserBehaviorPredictor:_updateRnnStatePrep()
+    -- states after preprocessing
+    for j=1, opt.lstmHist do
+        local prepSinStepState = torch.Tensor(1, self.CIUSim.userStateFeatureCnt)
+        prepSinStepState[1] = self.CIUSim:preprocessUserStateData(self.tabRnnStateRaw[j][1], self.opt.prepro)
+        self.tabRnnStatePrep[j] = prepSinStepState:clone()
+    end
+end
+
+
 function CIUserBehaviorPredictor:start()
     local valid = false
 
@@ -245,48 +296,9 @@ function CIUserBehaviorPredictor:start()
             end
             self.tabRnnStateRaw[opt.lstmHist] = self.nextSingleStepStateRaw:clone()
 
-            -- states after preprocessing
-            for j=1, opt.lstmHist do
-                local prepSinStepState = torch.Tensor(1, self.CIUSim.userStateFeatureCnt)
-                prepSinStepState[1] = self.CIUSim:preprocessUserStateData(self.tabRnnStateRaw[j][1], self.opt.prepro)
-                self.tabRnnStatePrep[j] = prepSinStepState:clone()
-            end
-
             self.timeStepCnt = self.timeStepCnt + 1
-
-            -- Pick an action using the action prediction model
-            self.userActsPred:forget()
-            local nll_acts = self.userActsPred:forward(self.tabRnnStatePrep)[self.opt.lstmHist]:squeeze() -- get act choice output for last time step
-
-            --        print('Action choice likelihood Next time step:\n', torch.exp(nll_acts))
-            local lpy   -- log likelihood value
-            local lps   -- sorted index in desendent-order
-            lpy, lps = torch.sort(nll_acts, 1, true)
-            lpy = torch.exp(lpy)
-            lpy = torch.cumsum(lpy)
-            local actSampleLen = self.opt.actSmpLen
-            lpy = torch.div(lpy, lpy[actSampleLen])
-            local greedySmpThres = 0.75
-
-            if self.timeStepCnt == 2 then
-                greedySmpThres = 0.1
-            elseif self.timeStepCnt == 3 then
-                greedySmpThres = 0.3
-            elseif self.timeStepCnt == 4 then
-                greedySmpThres = 0.5
-            end
-
-            self.curRnnUserAct = lps[1]  -- the action result given by the action predictor
-            if torch.uniform() > greedySmpThres then
-                -- sample according to classifier output
-                local rndActPick = torch.uniform()
-                for i=1, actSampleLen do
-                    if rndActPick <= lpy[i] then
-                        self.curRnnUserAct = lps[i]
-                        break
-                    end
-                end
-            end
+            self._updateRnnStatePrep()
+            self:_calcUserAct()
 
             print(self.timeStepCnt, 'time step state:') for k,v in ipairs(self.tabRnnStateRaw) do print(k,v) end
             print(self.timeStepCnt, 'time step act:', self.curRnnUserAct)
@@ -299,34 +311,20 @@ function CIUserBehaviorPredictor:start()
         -- Attention: we guarantee that the ending user action will not trigger adaptation
         if self.adpTriggered then
             print('--- Adp triggered')
-            -- apply user's action onto raw state representation
-            self.nextSingleStepStateRaw = self.tabRnnStateRaw[self.opt.lstmHist]:clone()
-            self.CIUSim:applyUserActOnState(self.nextSingleStepStateRaw, self.curRnnUserAct)
-            -- reconstruct rnn state table for next time step
-            for j=1, opt.lstmHist-1 do
-                self.tabRnnStateRaw[j] = self.tabRnnStateRaw[j+1]:clone()
-            end
-            self.tabRnnStateRaw[opt.lstmHist] = self.nextSingleStepStateRaw:clone()
-
-            -- states after preprocessing
-            for j=1, opt.lstmHist do
-                local prepSinStepState = torch.Tensor(1, self.CIUSim.userStateFeatureCnt)
-                prepSinStepState[1] = self.CIUSim:preprocessUserStateData(self.tabRnnStateRaw[j][1], self.opt.prepro)
-                self.tabRnnStatePrep[j] = prepSinStepState:clone()
-            end
 
             self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
 
             -- Need to add the user action's effect on rl state
-            self.rlStatePrep[1][1] = self.tabRnnStatePrep[self.opt.lstmHist][1]   -- preprocess before sending back to RL
+            self.CIUSim:applyUserActOnState(self.rlStateRaw, self.curRnnUserAct)
+
+            -- Need to add the user action's effect on rl state
+            self.rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(self.rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
             print('--- After apply user act, rl state:', self.rlStateRaw[1][1])
             print('--- Prep rl state', self.rlStatePrep[1][1])
             -- Should get action choice from the RL agent here
 
             valid = true    -- not necessary
             return self.rlStatePrep, self.adpType
---            -- Apply rl adp action onto user's single time step state
---            self.CIUSim:applyAdpActOnState(self.nextSingleStepStateRaw, self.adpType, rndAdpAct)
 
         else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
             print('Regenerate user behavior trajectory from start!')
@@ -339,7 +337,66 @@ end
 
 function CIUserBehaviorPredictor:step(adpAct)
     assert(adpAct >= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][1] and adpAct <= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][2])
-    -- Todo:pwang8. Implement this step()
+
+    self.nextSingleStepStateRaw = self.tabRnnStateRaw[self.opt.lstmHist]:clone()
+    self.CIUSim:applyAdpActOnState(self.nextSingleStepStateRaw, self.adpType, adpAct)
+
+    repeat
+
+        self.CIUSim:applyUserActOnState(self.nextSingleStepStateRaw, self.curRnnUserAct)
+        -- reconstruct rnn state table for next time step
+        for j=1, opt.lstmHist-1 do
+            self.tabRnnStateRaw[j] = self.tabRnnStateRaw[j+1]:clone()
+        end
+        self.tabRnnStateRaw[opt.lstmHist] = self.nextSingleStepStateRaw:clone()
+
+        self.timeStepCnt = self.timeStepCnt + 1
+        self._updateRnnStatePrep()
+        self:_calcUserAct()
+
+        print(self.timeStepCnt, 'time step state:') for k,v in ipairs(self.tabRnnStateRaw) do print(k,v) end
+        print(self.timeStepCnt, 'time step act:', self.curRnnUserAct)
+
+        -- When user ap/sp state and action were given, check if adaptation could be triggered
+        self.adpTriggered, self.adpType = self.CIUSim:isAdpTriggered(self.tabRnnStateRaw[self.opt.lstmHist], self.curRnnUserAct)
+
+        self.nextSingleStepStateRaw = self.tabRnnStateRaw[self.opt.lstmHist]:clone()
+
+    until self.adpTriggered or self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
+
+    -- Attention: we guarantee that the ending user action will not trigger adaptation
+    if self.adpTriggered then
+        print('--- Adp triggered')
+
+        self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
+
+        -- Need to add the user action's effect on rl state
+        self.CIUSim:applyUserActOnState(self.rlStateRaw, self.curRnnUserAct)
+
+        -- Need to add the user action's effect on rl state
+        self.rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(self.rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
+        print('--- After apply user act, rl state:', self.rlStateRaw[1][1])
+        print('--- Prep rl state', self.rlStatePrep[1][1])
+        -- Should get action choice from the RL agent here
+
+        return 0, self.rlStatePrep, false, self.adpType
+
+    else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
+        self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
+        -- Does not need to apply an ending user action. It will not change state representation.
+        -- Need to add the user action's effect on rl state
+        self.rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(self.rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
+
+        local nll_rewards = self.userScorePred:forward(self.tabRnnStatePrep)
+        lp, rin = torch.max(nll_rewards[opt.lstmHist]:squeeze(), 1)
+        print('Predicted reward:', rin[1], torch.exp(nll_rewards[opt.lstmHist]:squeeze()))
+        print('--====== End')
+        local score = 1
+        if rin[1] == 2 then score = -1 end
+
+        return score, self.rlStatePrep, true, 0
+    end
+
 end
 
 return CIUserBehaviorPredictor

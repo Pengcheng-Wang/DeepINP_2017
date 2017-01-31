@@ -58,15 +58,16 @@ elseif opt.trType == 'bg' then
     local scoreStat = {0, 0}
     local totalTrajLength = 0
     local totalLengthEachType = {0, 0}
-    for i=1, 402 do
-        local sc, tl
-        sc, tl = CIUserBehaviorGen:sampleOneTraj()
-        scoreStat[sc] = scoreStat[sc] + 1
-        totalTrajLength = totalTrajLength + tl
-        totalLengthEachType[sc] = totalLengthEachType[sc] + tl
-    end
-    print('Score dist:', scoreStat, 'Avg length:', totalTrajLength/402, 'Avg length of each nlg type 1:', totalLengthEachType[1]/scoreStat[1],
-        'Avg length of each nlg type 2:', totalLengthEachType[2]/scoreStat[2])
+--    for i=1, 402 do
+--        local sc, tl
+--        sc, tl = CIUserBehaviorGen:sampleOneTraj()
+--        scoreStat[sc] = scoreStat[sc] + 1
+--        totalTrajLength = totalTrajLength + tl
+--        totalLengthEachType[sc] = totalLengthEachType[sc] + tl
+--    end
+--    print('Score dist:', scoreStat, 'Avg length:', totalTrajLength/402, 'Avg length of each nlg type 1:', totalLengthEachType[1]/scoreStat[1],
+--        'Avg length of each nlg type 2:', totalLengthEachType[2]/scoreStat[2])
+    CIUserBehaviorGen:start()
 end
 
 

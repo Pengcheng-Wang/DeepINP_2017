@@ -203,7 +203,7 @@ end
 function CIUserSimulator:applyUserActOnState(curState, userAct)
     -- curState should be a 1d or 2d tensor. If it is
     -- 2d, I assume the 1st dim is batch dimension
-    assert(userAct >= self.CIFr.usrActInd_posterRead and userAct <= self.CIFr.usrActInd_end)
+    assert(userAct >= self.CIFr.usrActInd_posterRead and userAct < self.CIFr.usrActInd_end)
     assert(curState:dim() == 1 or curState:dim() == 2 or curState:dim() == 3)
     local stateRef = curState
     if curState:dim() == 2 then
