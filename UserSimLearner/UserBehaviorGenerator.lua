@@ -22,7 +22,7 @@ local TableSet = require 'MyMisc.TableSetMisc'
 local CIUserBehaviorPredictor = classic.class('UserBehaviorPredictor')
 
 function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserScorePred, opt)
-    print('#', paths.concat(opt.ubgDir , opt.uapFile))
+
     self.userActsPred = torch.load(paths.concat(opt.ubgDir , opt.uapFile))
     self.userScorePred = torch.load(paths.concat(opt.ubgDir , opt.uspFile))
     self.userActsPred:evaluate()
@@ -213,7 +213,7 @@ function CIUserBehaviorPredictor:_calcUserAct()
     lpy = torch.cumsum(lpy)
     local actSampleLen = self.opt.actSmpLen
     lpy = torch.div(lpy, lpy[actSampleLen])
-    local greedySmpThres = 0.75
+    local greedySmpThres = 0.6
 
     if self.timeStepCnt == 2 then
         greedySmpThres = 0.1
@@ -277,8 +277,8 @@ function CIUserBehaviorPredictor:start()
         self.tabRnnStatePrep = {}
         self.timeStepCnt = 1
 
-        print(self.timeStepCnt, 'time step state:') for k,v in ipairs(self.tabRnnStateRaw) do print(k,v) end
-        print(self.timeStepCnt, 'time step act:', self.curRnnUserAct)
+--        print(self.timeStepCnt, 'time step state:') for k,v in ipairs(self.tabRnnStateRaw) do print(k,v) end
+--        print(self.timeStepCnt, 'time step act:', self.curRnnUserAct)
 
         -- When user ap/sp state and action were given, check if adaptation could be triggered
         self.adpTriggered, self.adpType = self.CIUSim:isAdpTriggered(self.tabRnnStateRaw[self.opt.lstmHist], self.curRnnUserAct)
@@ -297,11 +297,11 @@ function CIUserBehaviorPredictor:start()
             self.tabRnnStateRaw[opt.lstmHist] = self.nextSingleStepStateRaw:clone()
 
             self.timeStepCnt = self.timeStepCnt + 1
-            self._updateRnnStatePrep()
+            self:_updateRnnStatePrep()
             self:_calcUserAct()
 
-            print(self.timeStepCnt, 'time step state:') for k,v in ipairs(self.tabRnnStateRaw) do print(k,v) end
-            print(self.timeStepCnt, 'time step act:', self.curRnnUserAct)
+--            print(self.timeStepCnt, 'time step state:') for k,v in ipairs(self.tabRnnStateRaw) do print(k,v) end
+--            print(self.timeStepCnt, 'time step act:', self.curRnnUserAct)
 
             -- When user ap/sp state and action were given, check if adaptation could be triggered
             self.adpTriggered, self.adpType = self.CIUSim:isAdpTriggered(self.tabRnnStateRaw[self.opt.lstmHist], self.curRnnUserAct)
@@ -310,7 +310,7 @@ function CIUserBehaviorPredictor:start()
 
         -- Attention: we guarantee that the ending user action will not trigger adaptation
         if self.adpTriggered then
-            print('--- Adp triggered')
+--            print('--- Adp triggered')
 
             self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
 
@@ -319,15 +319,15 @@ function CIUserBehaviorPredictor:start()
 
             -- Need to add the user action's effect on rl state
             self.rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(self.rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
-            print('--- After apply user act, rl state:', self.rlStateRaw[1][1])
-            print('--- Prep rl state', self.rlStatePrep[1][1])
+--            print('--- After apply user act, rl state:', self.rlStateRaw[1][1])
+--            print('--- Prep rl state', self.rlStatePrep[1][1])
             -- Should get action choice from the RL agent here
 
             valid = true    -- not necessary
             return self.rlStatePrep, self.adpType
 
         else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
-            print('Regenerate user behavior trajectory from start!')
+--            print('Regenerate user behavior trajectory from start!')
             valid = false   -- not necessary
         end
 
@@ -351,11 +351,11 @@ function CIUserBehaviorPredictor:step(adpAct)
         self.tabRnnStateRaw[opt.lstmHist] = self.nextSingleStepStateRaw:clone()
 
         self.timeStepCnt = self.timeStepCnt + 1
-        self._updateRnnStatePrep()
+        self:_updateRnnStatePrep()
         self:_calcUserAct()
 
-        print(self.timeStepCnt, 'time step state:') for k,v in ipairs(self.tabRnnStateRaw) do print(k,v) end
-        print(self.timeStepCnt, 'time step act:', self.curRnnUserAct)
+--        print(self.timeStepCnt, 'time step state:') for k,v in ipairs(self.tabRnnStateRaw) do print(k,v) end
+--        print(self.timeStepCnt, 'time step act:', self.curRnnUserAct)
 
         -- When user ap/sp state and action were given, check if adaptation could be triggered
         self.adpTriggered, self.adpType = self.CIUSim:isAdpTriggered(self.tabRnnStateRaw[self.opt.lstmHist], self.curRnnUserAct)
@@ -366,7 +366,7 @@ function CIUserBehaviorPredictor:step(adpAct)
 
     -- Attention: we guarantee that the ending user action will not trigger adaptation
     if self.adpTriggered then
-        print('--- Adp triggered')
+--        print('--- Adp triggered')
 
         self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
 
@@ -375,8 +375,8 @@ function CIUserBehaviorPredictor:step(adpAct)
 
         -- Need to add the user action's effect on rl state
         self.rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(self.rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
-        print('--- After apply user act, rl state:', self.rlStateRaw[1][1])
-        print('--- Prep rl state', self.rlStatePrep[1][1])
+--        print('--- After apply user act, rl state:', self.rlStateRaw[1][1])
+--        print('--- Prep rl state', self.rlStatePrep[1][1])
         -- Should get action choice from the RL agent here
 
         return 0, self.rlStatePrep, false, self.adpType
@@ -389,8 +389,8 @@ function CIUserBehaviorPredictor:step(adpAct)
 
         local nll_rewards = self.userScorePred:forward(self.tabRnnStatePrep)
         lp, rin = torch.max(nll_rewards[opt.lstmHist]:squeeze(), 1)
-        print('Predicted reward:', rin[1], torch.exp(nll_rewards[opt.lstmHist]:squeeze()))
-        print('--====== End')
+--        print('Predicted reward:', rin[1], torch.exp(nll_rewards[opt.lstmHist]:squeeze()))
+--        print('--====== End')
         local score = 1
         if rin[1] == 2 then score = -1 end
 

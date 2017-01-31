@@ -5,7 +5,7 @@ local CIUserScorePredictor = require 'UserSimLearner/UserScorePredictor'
 local CIUserBehaviorGenerator = require 'UserSimLearner/UserBehaviorGenerator'
 
 opt = lapp[[
-       --trType         (default "sc")           training type : sc (score) | ac (action) | bg (behavior generation)
+       --trType         (default "rl")           training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API)
        -s,--save          (default "upplogs")      subdirectory to save logs
        -n,--network       (default "")          reload pretrained network
        -m,--uppModel         (default "lstm")   type of model tor train: moe | mlp | linear | lstm
@@ -58,16 +58,30 @@ elseif opt.trType == 'bg' then
     local scoreStat = {0, 0}
     local totalTrajLength = 0
     local totalLengthEachType = {0, 0}
---    for i=1, 402 do
---        local sc, tl
---        sc, tl = CIUserBehaviorGen:sampleOneTraj()
---        scoreStat[sc] = scoreStat[sc] + 1
---        totalTrajLength = totalTrajLength + tl
---        totalLengthEachType[sc] = totalLengthEachType[sc] + tl
---    end
---    print('Score dist:', scoreStat, 'Avg length:', totalTrajLength/402, 'Avg length of each nlg type 1:', totalLengthEachType[1]/scoreStat[1],
---        'Avg length of each nlg type 2:', totalLengthEachType[2]/scoreStat[2])
-    CIUserBehaviorGen:start()
+    for i=1, 402 do
+        local sc, tl
+        sc, tl = CIUserBehaviorGen:sampleOneTraj()
+        scoreStat[sc] = scoreStat[sc] + 1
+        totalTrajLength = totalTrajLength + tl
+        totalLengthEachType[sc] = totalLengthEachType[sc] + tl
+    end
+    print('Score dist:', scoreStat, 'Avg length:', totalTrajLength/402, 'Avg length of each nlg type 1:', totalLengthEachType[1]/scoreStat[1],
+        'Avg length of each nlg type 2:', totalLengthEachType[2]/scoreStat[2])
+elseif opt.trType == 'rl' then
+    local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
+    local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
+    local CIUserBehaviorGen = CIUserBehaviorGenerator(CIUserModel, CIUserActsPred, CIUserScorePred, opt)
+
+    local obv, score, term, adpType
+    term = false
+    obv, adpType = CIUserBehaviorGen:start()
+    print('^### Outside in main\n state:', obv, '\n type:', adpType)
+    while not term do
+        local rndAdpAct = torch.random(fr.ciAdpActRanges[adpType][1], fr.ciAdpActRanges[adpType][2])
+        print('^--- Adaptation type', adpType, 'Random act choice: ', rndAdpAct)
+        score, obv, term, adpType = CIUserBehaviorGen:step(rndAdpAct)
+        print('^### Outside in main\n state:', obv, '\n type:', adpType, '\n score:', score, ',term:', term)
+    end
 end
 
 
