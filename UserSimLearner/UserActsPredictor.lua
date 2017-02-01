@@ -28,6 +28,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     end
 
     self.ciUserSimulator = CIUserSimulator
+    self.opt = opt
     ----------------------------------------------------------------------
     -- define model to train
     -- on the 15-class classification problem
@@ -146,14 +147,14 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
     ---
-    if opt.gpu_id > 0 then
+    if opt.gpu > 0 then
         local ok, cunn = pcall(require, 'cunn')
         local ok2, cutorch = pcall(require, 'cutorch')
         if not ok then print('package cunn not found!') end
         if not ok2 then print('package cutorch not found!') end
         if ok and ok2 then
-            print('using CUDA on GPU ' .. opt.gpu_id .. '...')
-            cutorch.setDevice(opt.gpu_id)
+            print('using CUDA on GPU ' .. opt.gpu .. '...')
+            cutorch.setDevice(opt.gpu)
 --            cutorch.manualSeed(opt.seed)
             --- set up cuda nn
             self.model = self.model:cuda()
@@ -162,7 +163,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
             print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
             print('Falling back on CPU mode')
-            opt.gpu_id = 0 -- overwrite user setting
+            opt.gpu = 0 -- overwrite user setting
         end
     end
 
@@ -235,24 +236,24 @@ function CIUserActsPredictor:trainOneEpoch()
 
     -- do one epoch
     print('<trainer> on training set:')
-    print("<trainer> online epoch # " .. self.trainEpoch .. ' [batchSize = ' .. opt.batchSize .. ']')
+    print("<trainer> online epoch # " .. self.trainEpoch .. ' [batchSize = ' .. self.opt.batchSize .. ']')
     local inputs
     local targets
     local t = 1
-    local lstmLengthPerBatch = math.ceil(#self.ciUserSimulator.realUserDataStates / opt.batchSize)
+    local lstmLengthPerBatch = math.ceil(#self.ciUserSimulator.realUserDataStates / self.opt.batchSize)
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
     local epochDone = false
     while not epochDone do
-        if opt.uppModel ~= 'lstm' then
+        if self.opt.uppModel ~= 'lstm' then
             -- create mini batch
-            inputs = torch.Tensor(opt.batchSize, self.inputFeatureNum)
-            targets = torch.Tensor(opt.batchSize)
+            inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
+            targets = torch.Tensor(self.opt.batchSize)
             local k = 1
-            for i = t, math.min(t+opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
+            for i = t, math.min(t+self.opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
                 -- load new sample
                 local input = self.ciUserSimulator.realUserDataStates[i]    -- :clone() -- if preprocess is called, clone is not needed, I believe
                 -- need do preprocess for input features
-                input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
+                input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
                 local target = self.ciUserSimulator.realUserDataActs[i]
                 inputs[k] = input
                 targets[k] = target
@@ -260,21 +261,21 @@ function CIUserActsPredictor:trainOneEpoch()
             end
 
             -- at the end of dataset, if it could not be divided into full batch
-            if k ~= opt.batchSize + 1 then
-                while k <= opt.batchSize do
+            if k ~= self.opt.batchSize + 1 then
+                while k <= self.opt.batchSize do
                     local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
-                    inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], opt.prepro)
+                    inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], self.opt.prepro)
                     targets[k] = self.ciUserSimulator.realUserDataActs[randInd]
                     k = k + 1
                 end
             end
 
-            t = t + opt.batchSize
+            t = t + self.opt.batchSize
             if t > #self.ciUserSimulator.realUserDataStates then
                 epochDone = true
             end
 
-            if opt.gpu_id > 0 then
+            if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
                 targets = targets:cuda()
             end
@@ -284,13 +285,13 @@ function CIUserActsPredictor:trainOneEpoch()
             inputs = {}
             targets = {}
             local k
-            for j = 1, opt.lstmHist do
-                inputs[j] = torch.Tensor(opt.batchSize, self.inputFeatureNum)
-                targets[j] = torch.Tensor(opt.batchSize)
+            for j = 1, self.opt.lstmHist do
+                inputs[j] = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
+                targets[j] = torch.Tensor(self.opt.batchSize)
                 k = 1
-                for i = lstmIter, math.min(lstmIter+opt.batchSize-1, #self.rnnRealUserDataStates) do
+                for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
                     local input = self.rnnRealUserDataStates[i][j]
-                    input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
+                    input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
                     local target = self.rnnRealUserDataActs[i][j]
                     inputs[j][k] = input
                     targets[j][k] = target
@@ -299,12 +300,12 @@ function CIUserActsPredictor:trainOneEpoch()
             end
 
             -- at the end of dataset, if it could not be divided into full batch
-            if k ~= opt.batchSize + 1 then
-                while k <= opt.batchSize do
+            if k ~= self.opt.batchSize + 1 then
+                while k <= self.opt.batchSize do
                     local randInd = torch.random(1, #self.rnnRealUserDataStates)
-                    for j = 1, opt.lstmHist do
+                    for j = 1, self.opt.lstmHist do
                         local input = self.rnnRealUserDataStates[randInd][j]
-                        input = self.ciUserSimulator:preprocessUserStateData(input, opt.prepro)
+                        input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
                         local target = self.rnnRealUserDataActs[randInd][j]
                         inputs[j][k] = input
                         targets[j][k] = target
@@ -313,12 +314,12 @@ function CIUserActsPredictor:trainOneEpoch()
                 end
             end
 
-            lstmIter = lstmIter + opt.batchSize
+            lstmIter = lstmIter + self.opt.batchSize
             if lstmIter > #self.rnnRealUserDataStates then
                 epochDone = true
             end
 
-            if opt.gpu_id > 0 then
+            if self.opt.gpu > 0 then
                 for _,v in pairs(inputs) do
                     v = v:cuda()
                 end
@@ -351,27 +352,27 @@ function CIUserActsPredictor:trainOneEpoch()
             self.model:backward(inputs, df_do)
 
             -- penalties (L1 and L2):
-            if opt.coefL1 ~= 0 or opt.coefL2 ~= 0 then
+            if self.opt.coefL1 ~= 0 or self.opt.coefL2 ~= 0 then
                 -- locals:
                 local norm,sign= torch.norm,torch.sign
 
                 -- Loss:
-                f = f + opt.coefL1 * norm(self.uapParam,1)
-                f = f + opt.coefL2 * norm(self.uapParam,2)^2/2
+                f = f + self.opt.coefL1 * norm(self.uapParam,1)
+                f = f + self.opt.coefL2 * norm(self.uapParam,2)^2/2
 
                 -- Gradients:
-                self.uapDParam:add( sign(self.uapParam):mul(opt.coefL1) + self.uapParam:clone():mul(opt.coefL2) )
+                self.uapDParam:add( sign(self.uapParam):mul(self.opt.coefL1) + self.uapParam:clone():mul(self.opt.coefL2) )
             end
 
             -- update self.uapConfusion
-            if opt.uppModel == 'lstm' then
-                for j = 1, opt.lstmHist do
-                    for i = 1,opt.batchSize do
+            if self.opt.uppModel == 'lstm' then
+                for j = 1, self.opt.lstmHist do
+                    for i = 1,self.opt.batchSize do
                         self.uapConfusion:add(outputs[j][i], targets[j][i])
                     end
                 end
             else
-                for i = 1,opt.batchSize do
+                for i = 1,self.opt.batchSize do
                     self.uapConfusion:add(outputs[i], targets[i])
                 end
             end
@@ -381,16 +382,16 @@ function CIUserActsPredictor:trainOneEpoch()
         end
 
         self.model:training()
-        if opt.uppModel == 'lstm' then
+        if self.opt.uppModel == 'lstm' then
             self.model:forget()
         end
 
         -- optimize on current mini-batch
-        if opt.optimization == 'LBFGS' then
+        if self.opt.optimization == 'LBFGS' then
 
             -- Perform LBFGS step:
             lbfgsState = lbfgsState or {
-                maxIter = opt.maxIter,
+                maxIter = self.opt.maxIter,
                 lineSearch = optim.lswolfe
             }
             optim.lbfgs(feval, self.uapParam, lbfgsState)
@@ -401,50 +402,50 @@ function CIUserActsPredictor:trainOneEpoch()
             print(' - nb of iterations: ' .. lbfgsState.nIter)
             print(' - nb of function evalutions: ' .. lbfgsState.funcEval)
 
-        elseif opt.optimization == 'SGD' then
+        elseif self.opt.optimization == 'SGD' then
 
             -- Perform SGD step:
             sgdState = sgdState or {
-                learningRate = opt.learningRate,
-                momentum = opt.momentum,
+                learningRate = self.opt.learningRate,
+                momentum = self.opt.momentum,
                 learningRateDecay = 5e-7
             }
             optim.sgd(feval, self.uapParam, sgdState)
 
             -- disp progress
-            if opt.uppModel ~= 'lstm' then
+            if self.opt.uppModel ~= 'lstm' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
             end
 
 
-        elseif opt.optimization == 'adam' then
+        elseif self.opt.optimization == 'adam' then
 
             -- Perform Adam step:
             adamState = adamState or {
-                learningRate = opt.learningRate,
+                learningRate = self.opt.learningRate,
                 learningRateDecay = 5e-7
             }
             optim.adam(feval, self.uapParam, adamState)
 
             -- disp progress
-            if opt.uppModel ~= 'lstm' then
+            if self.opt.uppModel ~= 'lstm' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
             end
 
-        elseif opt.optimization == 'rmsprop' then
+        elseif self.opt.optimization == 'rmsprop' then
 
             -- Perform Adam step:
             rmspropState = rmspropState or {
-                learningRate = opt.learningRate
+                learningRate = self.opt.learningRate
             }
             optim.rmsprop(feval, self.uapParam, rmspropState)
 
             -- disp progress
-            if opt.uppModel ~= 'lstm' then
+            if self.opt.uppModel ~= 'lstm' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -471,7 +472,7 @@ function CIUserActsPredictor:trainOneEpoch()
     self.uapConfusion:zero()
 
     -- save/log current net
-    local filename = paths.concat(opt.save, 'uap.t7')
+    local filename = paths.concat(self.opt.save, 'uap.t7')
     os.execute('mkdir -p ' .. sys.dirname(filename))
     if paths.filep(filename) then
         os.execute('mv ' .. filename .. ' ' .. filename .. '.old')

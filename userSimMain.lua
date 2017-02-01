@@ -19,7 +19,7 @@ opt = lapp[[
        --coefL1           (default 0)           L1 penalty on the weights
        --coefL2           (default 0)           L2 penalty on the weights
        -t,--threads       (default 4)           number of threads
-       -g,--gpu_id        (default 0)          gpu device id, 0 for using cpu
+       -g,--gpu        (default 0)          gpu device id, 0 for using cpu
        --prepro           (default "std")       input state feature preprocessing: rsc | std
        --lstmHd           (default 192)          lstm hidden layer size
        --lstmHist         (default 6)           lstm hist length
