@@ -101,6 +101,9 @@ function Agent:_init(opt)
 
   -- Get singleton instance for step
   self.globals = Singleton.getInstance()  -- this global singleton stores one value, the steps
+  self.opt = opt
+  -- Sorry, adding ugly code here again, just for CI data compatability
+  self.CIActAdpBound = {{1, 3}, {4, 5}, {6, 8}, {9, 10}}
 end
 
 -- Sets training mode
@@ -156,7 +159,7 @@ function Agent:observe(reward, rawObservation, terminal)
     self.stateBuffer:push(observation)  -- the size/capacity of the CircularQueue equals histLen
   end
   -- Retrieve current and historical states from state buffer
-  local state = self.stateBuffer:readAll()  -- the returned value is one tensor containing all histLen frames
+  local state = self.stateBuffer:readAll()  -- the returned value is one tensor containing all histLen frames -- state dim is 4*1*25 for CI data. 4 is histLen
 
   -- Set ε based on training vs. evaluation mode
   local epsilon = 0.001 -- Taken from tuned DDQN evaluation
@@ -178,6 +181,22 @@ function Agent:observe(reward, rawObservation, terminal)
 
       -- Use ensemble policy with bootstrap heads (in evaluation mode)
       local QHeadsMax, QHeadsMaxInds = QHeads:max(2) -- Find max action per head -- torch.mode() is a function returns most frequently appeared element (maths)
+      -- If it is CI data, pick up actions according to adpType
+      if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+        QHeadsMax, QHeadsMaxInds = QHeads:min(2)
+        local adpT = 0
+        if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif adpT[-1][1][-1] > 0.1 then adpT = 4 end
+        assert(adpT >=1 and adpT <= 4)
+        for i=1, QHeads:size(1) do
+          for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+            if QHeads[i][j] >= QHeadsMax[i] then
+              QHeadsMax[i] = QHeads[i][j]
+              QHeadsMaxInds[i] = j
+            end
+          end
+        end
+      end
+
       aIndex = torch.mode(QHeadsMaxInds:float(), 1)[1][1] -- TODO: Torch.CudaTensor:mode is missing
 
       -- Plot uncertainty in ensemble policy
@@ -192,6 +211,13 @@ function Agent:observe(reward, rawObservation, terminal)
     elseif torch.uniform() < epsilon then 
       -- Choose action by ε-greedy exploration (even with bootstraps)
       aIndex = torch.random(1, self.m)
+      -- If it is CI data, pick up actions according to adpType
+      if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+        local adpT = 0
+        if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif adpT[-1][1][-1] > 0.1 then adpT = 4 end
+        assert(adpT >=1 and adpT <= 4)
+        aIndex = torch.random(self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2])
+      end
 
       -- Forward state anyway if recurrent
       if self.recurrent then
@@ -219,6 +245,24 @@ function Agent:observe(reward, rawObservation, terminal)
           bestAs[#bestAs + 1] = a
         end
       end
+
+      -- If it is CI data, pick up actions according to adpType
+      if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+        local adpT = 0
+        if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif adpT[-1][1][-1] > 0.1 then adpT = 4 end
+        assert(adpT >=1 and adpT <= 4)
+        maxQ = Qs[self.CIActAdpBound[adpT][1]]
+        bestAs = {self.CIActAdpBound[adpT][1]}
+        for a = self.CIActAdpBound[adpT][1]+1, self.CIActAdpBound[adpT][2] do
+          if Qs[a] > maxQ then
+            maxQ = Qs[a]
+            bestAs = {a}
+          elseif Qs[a] == maxQ then -- Ties can occur even with floats
+            bestAs[#bestAs + 1] = a
+          end
+        end
+      end
+
       -- Perform random tie-breaking (if more than one argmax action)
       aIndex = bestAs[torch.random(1, #bestAs)]
 
@@ -228,7 +272,7 @@ function Agent:observe(reward, rawObservation, terminal)
       end
     end
   end
-
+print('SSSSSS') os.exit() -- Todo: pwang8. Start from here later.
   -- If training
   if self.isTraining then
     -- Store experience tuple parts (including pre-emptive action)

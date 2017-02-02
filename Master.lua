@@ -77,7 +77,8 @@ function Master:train()
   -- Catch CTRL-C to save
   self:catchSigInt()
 
-  local reward, state, terminal = 0, self.env:start(), false
+  local reward, terminal = 0, false
+  local state, adpType = self.env:start()
 
   -- Set environment and agent to training mode
   self.env:training()
@@ -97,7 +98,8 @@ function Master:train()
     local action = self.agent:observe(reward, state, terminal) -- As results received, learn in training mode
     if not terminal then
       -- Act on environment (to cause transition)
-      reward, state, terminal = self.env:step(action)
+      if adpType == 1 then action = 1 elseif adpType == 2 then action = 5 elseif adpType == 3 then action = 6 else action = 9 end   -- Todo:pwang8. Delete this
+      reward, state, terminal, adpType = self.env:step(action)
       -- Track score
       episodeScore = episodeScore + reward
     else

@@ -52,6 +52,7 @@ function CIUserSimEnv:_init(opt)
     self.adpType = 0  -- valid type value should range from 1 to 4
     self.rlStateRaw = torch.Tensor(1, 1, self.CIUSim.userStateFeatureCnt):fill(0)   -- this state should be 3d
     self.rlStatePrep = torch.Tensor(1, 1, self.CIUSim.userStateFeatureCnt):fill(0)   -- this state should be 3d
+    self.rlStatePrepTypeInd = torch.Tensor(1, 1, self.CIUSim.userStateFeatureCnt + #self.CIUSim.CIFr.ciAdpActRanges):fill(0)   -- This representation contains 4 bits as adpType indicator
     self.nextSingleStepStateRaw = nil
 
     self.tabRnnStateRaw = {}   -- raw state value, used for updating future states according to current actions. This is state for user act/score prediction nn, not for rl
@@ -71,12 +72,18 @@ end
 
 --  1 state returned, of type 'int', of dimensionality 1 x self.size x self.size, between 0 and 1
 function CIUserSimEnv:getStateSpec()
-    return {'real', {1, 1, self.CIUSim.userStateFeatureCnt}, {0, 3}}    -- not sure about threshold of values, not guaranteed
+    -- Attention: for CI data used in rl training, the returned state representation contains 4-bit of adpType indicator (last 4 bit)
+    return {'real', {1, 1, self.CIUSim.userStateFeatureCnt + #self.CIUSim.CIFr.ciAdpActRanges}, {0, 3}}    -- not sure about threshold of values, not guaranteed
 end
 
 -- 1 action required, of type 'int', of dimensionality 1, between 1 and 10
 function CIUserSimEnv:getActionSpec()
     return {'int', 1, {1, 10}}
+end
+
+-- Return a table containing optional action choices lower/upper bounds
+function CIUserSimEnv:getActBoundOfAdpType(adpT)
+    return self.CIUSim.CIFr.ciAdpActRanges[adpT]
 end
 
 
@@ -127,6 +134,17 @@ function CIUserSimEnv:_updateRnnStatePrep()
         local prepSinStepState = torch.Tensor(1, self.CIUSim.userStateFeatureCnt)
         prepSinStepState[1] = self.CIUSim:preprocessUserStateData(self.tabRnnStateRaw[j][1], self.opt.prepro)
         self.tabRnnStatePrep[j] = prepSinStepState:clone()
+    end
+end
+
+
+function CIUserSimEnv:_updateRLStatePrepTypeInd(endingType)
+    self.rlStatePrepTypeInd:zero()
+    for i=1, self.rlStatePrep:size(3) do
+        self.rlStatePrepTypeInd[1][1][i] = self.rlStatePrep[1][1][i]
+    end
+    if not endingType then
+        self.rlStatePrepTypeInd[1][1][self.rlStatePrep:size(3) + self.adpType] = 1
     end
 end
 
@@ -206,11 +224,14 @@ function CIUserSimEnv:start()
             -- Should get action choice from the RL agent here
 
             valid = true    -- not necessary
-            return self.rlStatePrep, self.adpType
+--            return self.rlStatePrep, self.adpType
+            self:_updateRLStatePrepTypeInd()
+
+            return self.rlStatePrepTypeInd, self.adpType
 
         else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
         --            print('Regenerate user behavior trajectory from start!')
-        valid = false   -- not necessary
+            valid = false   -- not necessary
         end
 
     end
@@ -261,22 +282,24 @@ function CIUserSimEnv:step(adpAct)
         --        print('--- Prep rl state', self.rlStatePrep[1][1])
         -- Should get action choice from the RL agent here
 
-        return 0, self.rlStatePrep, false, self.adpType
+        self:_updateRLStatePrepTypeInd()
+
+        return 0, self.rlStatePrepTypeInd, false, self.adpType
 
     else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
-    self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
-    -- Does not need to apply an ending user action. It will not change state representation.
-    -- Need to add the user action's effect on rl state
-    self.rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(self.rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
+        self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
+        -- Does not need to apply an ending user action. It will not change state representation.
+        -- Need to add the user action's effect on rl state
+        self.rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(self.rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
 
-    local nll_rewards = self.userScorePred:forward(self.tabRnnStatePrep)
-    lp, rin = torch.max(nll_rewards[self.opt.lstmHist]:squeeze(), 1)
-    --        print('Predicted reward:', rin[1], torch.exp(nll_rewards[self.opt.lstmHist]:squeeze()))
-    --        print('--====== End')
-    local score = 1
-    if rin[1] == 2 then score = -1 end
-
-    return score, self.rlStatePrep, true, 0
+        local nll_rewards = self.userScorePred:forward(self.tabRnnStatePrep)
+        lp, rin = torch.max(nll_rewards[self.opt.lstmHist]:squeeze(), 1)
+        --        print('Predicted reward:', rin[1], torch.exp(nll_rewards[self.opt.lstmHist]:squeeze()))
+        --        print('--====== End')
+        local score = 1
+        if rin[1] == 2 then score = -1 end
+        self:_updateRLStatePrepTypeInd(true)    -- pass true as param to indicate ending act is reached
+        return score, self.rlStatePrepTypeInd, true, 0
     end
 
 end
