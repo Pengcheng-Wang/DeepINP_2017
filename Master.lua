@@ -78,7 +78,7 @@ function Master:train()
   self:catchSigInt()
 
   local reward, terminal = 0, false
-  local state, adpType = self.env:start()
+  local state, adpType = self.env:start()   -- Todo: pwang8. This has been changed a little for compatibility with CI sim
 
   -- Set environment and agent to training mode
   self.env:training()
@@ -98,7 +98,7 @@ function Master:train()
     local action = self.agent:observe(reward, state, terminal) -- As results received, learn in training mode
     if not terminal then
       -- Act on environment (to cause transition)
-      if adpType == 1 then action = 1 elseif adpType == 2 then action = 5 elseif adpType == 3 then action = 6 else action = 9 end   -- Todo:pwang8. Delete this
+--      if adpType == 1 then action = 1 elseif adpType == 2 then action = 5 elseif adpType == 3 then action = 6 else action = 9 end   -- Todo:pwang8. Delete this
       reward, state, terminal, adpType = self.env:step(action)
       -- Track score
       episodeScore = episodeScore + reward
@@ -110,7 +110,8 @@ function Master:train()
 
       -- Start a new episode
       episode = episode + 1
-      reward, state, terminal = 0, self.env:start(), false
+      reward, terminal = 0, false
+      state, adpType =  self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
       episodeScore = reward -- Reset episode score
     end
 

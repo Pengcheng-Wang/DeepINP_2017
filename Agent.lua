@@ -185,13 +185,13 @@ function Agent:observe(reward, rawObservation, terminal)
       if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
         QHeadsMax, QHeadsMaxInds = QHeads:min(2)
         local adpT = 0
-        if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif adpT[-1][1][-1] > 0.1 then adpT = 4 end
+        if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
         assert(adpT >=1 and adpT <= 4)
         for i=1, QHeads:size(1) do
           for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
-            if QHeads[i][j] >= QHeadsMax[i] then
-              QHeadsMax[i] = QHeads[i][j]
-              QHeadsMaxInds[i] = j
+            if QHeads[i][j] >= QHeadsMax[i][1] then
+              QHeadsMax[i][1] = QHeads[i][j]
+              QHeadsMaxInds[i][1] = j
             end
           end
         end
@@ -214,7 +214,7 @@ function Agent:observe(reward, rawObservation, terminal)
       -- If it is CI data, pick up actions according to adpType
       if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
         local adpT = 0
-        if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif adpT[-1][1][-1] > 0.1 then adpT = 4 end
+        if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
         assert(adpT >=1 and adpT <= 4)
         aIndex = torch.random(self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2])
       end
@@ -249,7 +249,7 @@ function Agent:observe(reward, rawObservation, terminal)
       -- If it is CI data, pick up actions according to adpType
       if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
         local adpT = 0
-        if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif adpT[-1][1][-1] > 0.1 then adpT = 4 end
+        if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
         assert(adpT >=1 and adpT <= 4)
         maxQ = Qs[self.CIActAdpBound[adpT][1]]
         bestAs = {self.CIActAdpBound[adpT][1]}
@@ -272,11 +272,17 @@ function Agent:observe(reward, rawObservation, terminal)
       end
     end
   end
-print('SSSSSS') os.exit() -- Todo: pwang8. Start from here later.
+
   -- If training
   if self.isTraining then
     -- Store experience tuple parts (including pre-emptive action)
     self.memory:store(reward, observation, terminal, aIndex) -- TODO: Sample independent Bernoulli(p) bootstrap masks for all heads; p = 1 means no masks needed
+
+    --- Todo: pwang8. test
+    if observation[1][1][-4] == 0 and observation[1][1][-3] == 0 and
+            observation[1][1][-2] == 0 and observation[1][1][-1] == 0 and not terminal then
+      print('Error ===========', observation, 'act:', aIndex, 'ter:', terminal)
+    end
 
     -- Collect validation transitions at the start
     if self.globals.step <= self.valSize + 1 then
@@ -337,14 +343,37 @@ function Agent:learn(x, indices, ISWeights, isValidation)
     self.policyNet:forget()
     self.targetNet:forget()
   end
+  -- Dim of transitions is (32*4*1*1*25) for CI sim. 32 is batch size, 4 is histLen.
 
   -- Perform argmax action selection
   local APrimeMax, APrimeMaxInds
   if self.doubleQ then
     -- Calculate Q-values from transition using policy network
     self.QPrimes = self.policyNet:forward(transitions) -- Find argmax actions using policy network
+    -- Dim of self.QPrimes is 32*5*10. 32 is batchSize, 5 is boostraps #, 10 is output (action) dim. If bootstraps is set to 0, it becomes 32*1*10
     -- Perform argmax action selection on transition using policy network: argmax_a[Q(s', a; θpolicy)]
     APrimeMax, APrimeMaxInds = torch.max(self.QPrimes, 3)
+
+    -- If it is CI data, pick up actions according to adpType
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      APrimeMax, APrimeMaxInds = torch.min(self.QPrimes, 3)
+      for ib=1, N do  -- batch size
+        if terminals[ib] < 1 then -- only need to calculate Q' for non-terminated next states
+          local adpT = 0
+          if transitions[ib][-1][1][1][-4] > 0.1 then adpT = 1 elseif transitions[ib][-1][1][1][-3] > 0.1 then adpT = 2 elseif transitions[ib][-1][1][1][-2] > 0.1 then adpT = 3 elseif transitions[ib][-1][1][1][-1] > 0.1 then adpT = 4 end
+          assert(adpT >=1 and adpT <= 4)
+          for i=1, self.QPrimes:size(2) do    -- index of head in bootstraps in nn output
+            for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+              if self.QPrimes[ib][i][j] >= APrimeMax[ib][i][1] then
+                APrimeMax[ib][i][1] = self.QPrimes[ib][i][j]
+                APrimeMaxInds[ib][i][1] = j
+              end
+            end
+          end
+        end
+      end
+    end
+
     -- Calculate Q-values from transition using target network
     self.QPrimes = self.targetNet:forward(transitions) -- Evaluate Q-values of argmax actions using target network
   else
@@ -352,6 +381,27 @@ function Agent:learn(x, indices, ISWeights, isValidation)
     self.QPrimes = self.targetNet:forward(transitions) -- Find and evaluate Q-values of argmax actions using target network
     -- Perform argmax action selection on transition using target network: argmax_a[Q(s', a; θtarget)]
     APrimeMax, APrimeMaxInds = torch.max(self.QPrimes, 3)
+
+    -- If it is CI data, pick up actions according to adpType
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      APrimeMax, APrimeMaxInds = torch.min(self.QPrimes, 3)
+      for ib=1, N do  -- batch size
+        if terminals[ib] < 1 then -- only need to calculate Q' for non-terminated next states
+          local adpT = 0
+          if transitions[ib][-1][1][1][-4] > 0.1 then adpT = 1 elseif transitions[ib][-1][1][1][-3] > 0.1 then adpT = 2 elseif transitions[ib][-1][1][1][-2] > 0.1 then adpT = 3 elseif transitions[ib][-1][1][1][-1] > 0.1 then adpT = 4 end
+          assert(adpT >=1 and adpT <= 4)
+          for i=1, self.QPrimes:size(2) do    -- index of head in bootstraps in nn output
+            for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+              if self.QPrimes[ib][i][j] >= APrimeMax[ib][i][1] then
+                APrimeMax[ib][i][1] = self.QPrimes[ib][i][j]
+                APrimeMaxInds[ib][i][1] = j
+              end
+            end
+          end
+        end
+      end
+    end
+
   end
   -- self.QPrimes is a 3-dim tensor. 1st dim is batch index, 2nd dim is head index in bootstarps, 3rd dim is action index
   -- Initially set target Y = Q(s', argmax_a[Q(s', a; θ)]; θtarget), where initial θ is either θtarget (DQN) or θpolicy (DDQN)
@@ -360,15 +410,15 @@ function Agent:learn(x, indices, ISWeights, isValidation)
     self.QPrimes[n]:mul(1 - terminals[n]) -- Zero Q(s' a) when s' is terminal
     Y[n] = self.QPrimes[n]:gather(2, APrimeMaxInds[n])
   end
-  -- Calculate target Y := r + γ.Q(s', argmax_a[Q(s', a; θ)]; θtarget)
+  -- Calculate target Y := r + γ.Q(s', argmax_a[Q(s', a; θ)]; θtarget)  -- rewards has dim 32 (1-dim), which is batch size, terminal has same dim
   Y:mul(self.gamma):add(rewards:repeatTensor(1, self.heads))
 
   -- Get all predicted Q-values from the current state
   if self.recurrent and self.doubleQ then -- call forget here since if doubleQ is used, policyNet has been utilized above in QPrime calc
     self.policyNet:forget()
   end
-  local QCurr = self.policyNet:forward(states) -- Correct internal state of policy network before backprop
-  local QTaken = self.Tensor(N, self.heads)
+  local QCurr = self.policyNet:forward(states) -- Correct internal state of policy network before backprop.
+  local QTaken = self.Tensor(N, self.heads)    -- QCurr of dim 32*7*10 in CI sim, with 32 batchSize, 7 heads(bootstraps), 10 actions
   -- Get prediction of current Q-values with given actions
   for n = 1, N do
     QTaken[n] = QCurr[n][{{}, {actions[n]}}]  -- in QCurr[n], data are of 2-dim. 1st is head index, 2nd is action index.
@@ -383,12 +433,30 @@ function Agent:learn(x, indices, ISWeights, isValidation)
     if self.recurrent then
       self.targetNet:forget()
     end
-    local Qs = self.targetNet:forward(states)
+    local Qs = self.targetNet:forward(states) -- For CI sim, Qs of dim 32*7*10 in CI sim, with 32 batchSize, 7 heads(bootstraps), 10 actions
     local Q = self.Tensor(N, self.heads)
     for n = 1, N do
       Q[n] = Qs[n][{{}, {actions[n]}}]
     end
     local V = torch.max(Qs, 3) -- Current states cannot be terminal. 3-dim includes batchIndex, head index, action index
+
+    -- If it is CI data, pick up actions according to adpType
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      V = torch.min(Qs, 3)
+      for ib=1, N do  -- batch size
+          local adpT = 0
+          if states[ib][-1][1][1][-4] > 0.1 then adpT = 1 elseif states[ib][-1][1][1][-3] > 0.1 then adpT = 2 elseif states[ib][-1][1][1][-2] > 0.1 then adpT = 3 elseif states[ib][-1][1][1][-1] > 0.1 then adpT = 4 end
+          if adpT < 1 or adpT > 4 then print('@@@@=====', adpT, states[ib], actions[ib], transitions[ib]) end
+          assert(adpT >=1 and adpT <= 4)
+          for i=1, Q:size(2) do    -- index of head in bootstraps in nn output
+            for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+              if Qs[ib][i][j] >= V[ib][i][1] then
+                V[ib][i][1] = Qs[ib][i][j]
+              end
+            end
+          end
+      end
+    end
 
     -- Calculate Advantage Learning update ∆ALQ(s, a) := δ − αPAL(V(s) − Q(s, a))
     local tdErrAL = self.tdErr - V:csub(Q):mul(self.PALpha)
@@ -398,10 +466,55 @@ function Agent:learn(x, indices, ISWeights, isValidation)
     for n = 1, N do
       QPrime[n] = self.QPrimes[n][{{}, {actions[n]}}]
     end
+    -- QPrime has dim of 32*7, with batchSize 32, and bootstraps 7
     self.VPrime = torch.max(self.QPrimes, 3)
+
+    -- Attention: in CI sim environment, since actions are restricted by adpType, so intuitively PAL updates can not be applied
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      for ib=1, N do  -- batch size
+        if terminals[ib] < 1 then -- only need to calculate Q' for non-terminated next states
+          local adpT = 0
+          if transitions[ib][-1][1][1][-4] > 0.1 then adpT = 1 elseif transitions[ib][-1][1][1][-3] > 0.1 then adpT = 2 elseif transitions[ib][-1][1][1][-2] > 0.1 then adpT = 3 elseif transitions[ib][-1][1][1][-1] > 0.1 then adpT = 4 end
+          assert(adpT >=1 and adpT <= 4)
+          for i=1, self.QPrimes:size(2) do    -- index of head in bootstraps in nn output
+            for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+              if self.QPrimes[ib][i][j] >= self.VPrime[ib][i][1] then
+                self.VPrime[ib][i][1] = self.QPrimes[ib][i][j]
+              end
+            end
+          end
+        end
+      end
+      QPrime = self.VPrime:clone()
+      -- Since in CI environment, actions are restricted with its belonged adpType,
+      -- I just get rid of this αPAL(V(s') − Q(s', a)) calculation, whose original purpose is to encourage repeating recent actions.
+    end
 
     -- Calculate Persistent Advantage Learning update ∆PALQ(s, a) := max[∆ALQ(s, a), δ − αPAL(V(s') − Q(s', a))]
     self.tdErr = torch.max(torch.cat(tdErrAL, self.tdErr:csub((self.VPrime:csub(QPrime):mul(self.PALpha))), 3), 3):view(N, self.heads, 1)
+  else  -- when self.PALpha <= 0
+    -- Todo: pwang8. This is only needed for CI sim. We are going to update self.VPrime for purpose of validation
+    -- QPrime has dim of 32*7, with batchSize 32, and bootstraps 7
+    self.VPrime = torch.max(self.QPrimes, 3)
+
+    -- Attention: in CI sim environment, since actions are restricted by adpType, so intuitively PAL updates can not be applied
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      for ib=1, N do  -- batch size
+        if terminals[ib] < 1 then -- only need to calculate Q' for non-terminated next states
+          local adpT = 0
+          if transitions[ib][-1][1][1][-4] > 0.1 then adpT = 1 elseif transitions[ib][-1][1][1][-3] > 0.1 then adpT = 2 elseif transitions[ib][-1][1][1][-2] > 0.1 then adpT = 3 elseif transitions[ib][-1][1][1][-1] > 0.1 then adpT = 4 end
+          assert(adpT >=1 and adpT <= 4)
+          for i=1, self.QPrimes:size(2) do    -- index of head in bootstraps in nn output
+            for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+              if self.QPrimes[ib][i][j] >= self.VPrime[ib][i][1] then
+                self.VPrime[ib][i][1] = self.QPrimes[ib][i][j]
+              end
+            end
+          end
+        end
+      end
+    end
+
   end
 
   -- Calculate loss
@@ -530,10 +643,10 @@ function Agent:validate()
     self:learn(self.theta, indices, ISWeights:narrow(1, 1, batchSize), true)
     -- tensor:narrow() returns the ref to the original tensor along dim 1, with indices ranging from 1 to batchSize. A little bit like select()
 
-    -- Calculate V(s') and TD-error δ
-    if self.PALpha == 0 then
-      self.VPrime = torch.max(self.QPrimes, 3)
-    end
+--    --- Calculate V(s') and TD-error δ -- For CI sim, this has been moved into learn()
+--    if self.PALpha == 0 then
+--      self.VPrime = torch.max(self.QPrimes, 3)
+--    end
     -- Average over heads
     totalV = totalV + torch.mean(self.VPrime, 2):sum()
     totalTdErr = totalTdErr + torch.mean(self.tdErr, 2):abs():sum()

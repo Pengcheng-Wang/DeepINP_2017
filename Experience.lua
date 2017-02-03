@@ -104,8 +104,8 @@ function Experience:_init(capacity, opt, isValidation)
   -- Initialise first time step (s0)
   self.states[1]:zero() -- Blank out state
   self.terminals[1] = 0
-  self.actions[1] = 1 -- Action is no-op
-  self.invalid[1] = 0 -- First step is a fake blanked-out state, but can thereby be utilised
+  self.actions[1] = 0 --1 -- Action is no-op
+  self.invalid[1] = 1 --0 -- First step is a fake blanked-out state, but can thereby be utilised
   if self.memPriority then
     self.priorityQueue:insert(1, 1) -- First priority = 1
   end
@@ -205,6 +205,12 @@ function Experience:retrieve(indices)
       else
         self.transTuples.transitions[n][self.histLen] = self.states[memTIndex]:typeAs(self.transTuples.transitions)
       end
+    end
+
+    --- Todo: pwang8. test
+    if self.transTuples.states[n][-1][1][1][-4] == 0 and self.transTuples.states[n][-1][1][1][-3] == 0 and
+            self.transTuples.states[n][-1][1][1][-2] == 0 and self.transTuples.states[n][-1][1][1][-1] == 0 then
+      print('=====*****======', self.transTuples.states[n], 'act:', self.transTuples.actions[n], 'ter:', self.transTuples.terminals[n], 'ind:', indices[n], 'to:', self.size)
     end
   end
 
