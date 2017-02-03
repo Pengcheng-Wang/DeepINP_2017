@@ -131,6 +131,7 @@ function Agent:evaluate()
   self.stateBuffer:clear()
   -- Set previously stored state as invalid (as no transition stored)
   self.memory:setInvalid()
+--  self.valMemory:setInvalid() -- This should not be necessary if validation starts later than the fullfilling of valmemory
   -- Reset bootstrap head
   if self.bootstraps > 0 then
     self.head = torch.random(self.bootstraps)
@@ -279,8 +280,8 @@ function Agent:observe(reward, rawObservation, terminal)
     self.memory:store(reward, observation, terminal, aIndex) -- TODO: Sample independent Bernoulli(p) bootstrap masks for all heads; p = 1 means no masks needed
 
     --- Todo: pwang8. test
-    if observation[1][1][-4] == 0 and observation[1][1][-3] == 0 and
-            observation[1][1][-2] == 0 and observation[1][1][-1] == 0 and not terminal then
+    if observation[1][1][-4] < 1 and observation[1][1][-3] < 1 and
+            observation[1][1][-2] < 1 and observation[1][1][-1] < 1 and not terminal then
       print('Error ===========', observation, 'act:', aIndex, 'ter:', terminal)
     end
 
@@ -446,7 +447,6 @@ function Agent:learn(x, indices, ISWeights, isValidation)
       for ib=1, N do  -- batch size
           local adpT = 0
           if states[ib][-1][1][1][-4] > 0.1 then adpT = 1 elseif states[ib][-1][1][1][-3] > 0.1 then adpT = 2 elseif states[ib][-1][1][1][-2] > 0.1 then adpT = 3 elseif states[ib][-1][1][1][-1] > 0.1 then adpT = 4 end
-          if adpT < 1 or adpT > 4 then print('@@@@=====', adpT, states[ib], actions[ib], transitions[ib]) end
           assert(adpT >=1 and adpT <= 4)
           for i=1, Q:size(2) do    -- index of head in bootstraps in nn output
             for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
@@ -637,7 +637,7 @@ function Agent:validate()
     startIndex = (n - 1)*self.batchSize + 2
     endIndex = math.min(n*self.batchSize + 1, self.valSize + 1)
     batchSize = endIndex - startIndex + 1
-    indices = torch.linspace(startIndex, endIndex, batchSize):long()  -- This is a way to generate a tensor of # numbers ranging from startIn to endIn
+    indices = self.valMemory:sample()  --torch.linspace(startIndex, endIndex, batchSize):long()  -- This is a way to generate a tensor of # numbers ranging from startIn to endIn
 
     -- Perform "learning" (without optimisation)
     self:learn(self.theta, indices, ISWeights:narrow(1, 1, batchSize), true)

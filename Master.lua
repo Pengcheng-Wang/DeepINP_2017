@@ -111,7 +111,7 @@ function Master:train()
       -- Start a new episode
       episode = episode + 1
       reward, terminal = 0, false
-      state, adpType =  self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
+      state, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
       episodeScore = reward -- Reset episode score
     end
 
@@ -143,7 +143,8 @@ function Master:train()
 
       log.info('Resuming training')
       -- Start new game (as previous one was interrupted)
-      reward, state, terminal = 0, self.env:start(), false
+      reward, terminal = 0, false
+      state, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
       episodeScore = reward
     end
   end

@@ -103,7 +103,7 @@ function Experience:_init(capacity, opt, isValidation)
 
   -- Initialise first time step (s0)
   self.states[1]:zero() -- Blank out state
-  self.terminals[1] = 0
+  self.terminals[1] = 1 --0
   self.actions[1] = 0 --1 -- Action is no-op
   self.invalid[1] = 1 --0 -- First step is a fake blanked-out state, but can thereby be utilised
   if self.memPriority then
@@ -193,7 +193,7 @@ function Experience:retrieve(indices)
     until histIndex == 0 or self.terminals[memIndex] == 1 or self.invalid[memIndex] == 1
 
     -- If transition not terminal, fill in transition history (invalid states should not be selected in the first place)
-    if self.transTuples.terminals[n] == 0 then  -- this means if terminal is reached, this transition (s') is kept as zero tensor. It does not matter since if terminal is reached, V(s') is not calculated in updating
+    if self.transTuples.terminals[n] == 0 then  -- this means if terminal is not reached, this transition (s') is kept as zero tensor. It does not matter since if terminal is reached, V(s') is not calculated in updating
       -- Copy most recent state
       for h = 2, self.histLen do
         self.transTuples.transitions[n][h - 1] = self.transTuples.states[n][h]
@@ -210,7 +210,7 @@ function Experience:retrieve(indices)
     --- Todo: pwang8. test
     if self.transTuples.states[n][-1][1][1][-4] == 0 and self.transTuples.states[n][-1][1][1][-3] == 0 and
             self.transTuples.states[n][-1][1][1][-2] == 0 and self.transTuples.states[n][-1][1][1][-1] == 0 then
-      print('=====*****======', self.transTuples.states[n], 'act:', self.transTuples.actions[n], 'ter:', self.transTuples.terminals[n], 'ind:', indices[n], 'to:', self.size)
+      print('Error in Experience retrieve(). An invalid transition pair is retrieved, since starting state is an ending state')
     end
   end
 

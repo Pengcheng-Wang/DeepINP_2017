@@ -31,7 +31,8 @@ function Validation:validate()
   self.agent:evaluate()
 
   -- Start new game
-  local reward, state, terminal = 0, self.env:start(), false
+  local reward, terminal = 0, false
+  local state, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
 
   -- Validation variables
   local valEpisode = 1
@@ -44,7 +45,7 @@ function Validation:validate()
     local action = self.agent:observe(reward, state, terminal)
     if not terminal then
       -- Act on environment
-      reward, state, terminal = self.env:step(action)
+      reward, state, terminal, adpType = self.env:step(action)
       -- Track score
       valEpisodeScore = valEpisodeScore + reward
     else
@@ -55,7 +56,8 @@ function Validation:validate()
 
       -- Start a new episode
       valEpisode = valEpisode + 1
-      reward, state, terminal = 0, self.env:start(), false
+      reward, terminal = 0, false
+      state, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
       valTotalScore = valTotalScore + valEpisodeScore -- Only add to total score at end of episode
       valEpisodeScore = reward -- Reset episode score
     end
@@ -117,7 +119,8 @@ function Validation:evaluate()
   self.env:evaluate()
   self.agent:evaluate()
 
-  local reward, state, terminal = 0, self.env:start(), false
+  local reward, terminal = 0, false
+  local state, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
 
   -- Report episode score
   local episodeScore = reward
@@ -128,7 +131,7 @@ function Validation:evaluate()
     -- Observe and choose next action (index)
     action = self.agent:observe(reward, state, terminal)
     -- Act on environment
-    reward, state, terminal = self.env:step(action)
+    reward, state, terminal, adpType = self.env:step(action)
     episodeScore = episodeScore + reward
 
     -- Record (if available)
