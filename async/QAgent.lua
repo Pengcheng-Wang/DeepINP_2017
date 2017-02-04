@@ -55,7 +55,7 @@ end
 
 function QAgent:eGreedy(state, net)
   self.epsilon = math.max(self.epsilonStart + (self.step - 1)*self.epsilonGrad, self.epsilonEnd)
-
+  -- output for net:forward(state) has 2-dim size 1*10 (10 acts). After squeeze() it is 1-dim of size 10
   if self.alwaysComputeGreedyQ then
     self.QCurr = net:forward(state):squeeze()
   end

@@ -50,7 +50,7 @@ function A3CAgent:learn(steps, from)
       self.batchIdx = self.batchIdx + 1
       self.states[self.batchIdx]:copy(state)
 
-      local V, probability = table.unpack(self.policyNet_:forward(state))
+      local V, probability = table.unpack(self.policyNet_:forward(state)) -- For CI sim, V is a 1-dim, size-1 tensor, probability is a 1-dim, size-10 (act#) tensor.
       local action = torch.multinomial(probability, 1):squeeze()
 
       self.actions[self.batchIdx] = action

@@ -20,7 +20,7 @@ function AsyncEvaluation:_init(opt)
   local atomic = tds.AtomicCounter()
   self.validAgent = ValidationAgent(opt, theta, atomic)
 
-  local state = env:start()
+  local state, adpType = env:start()
   self.hasDisplay = false
   if opt.displaySpec then
     self.hasDisplay = true

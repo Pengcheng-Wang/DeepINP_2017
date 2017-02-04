@@ -53,22 +53,35 @@ function ValidationAgent:_init(opt, theta, atomic)
   self.a3c = opt.async == 'A3C'
   if self.a3c then self.selectAction = self.probabilisticAction end
 
+  -- Sorry, adding ugly code here again, just for CI data compatability
+  self.CIActAdpBound = {{1, 3}, {4, 5}, {6, 8}, {9, 10}}
+
   classic.strict(self)
 end
 
 
 function ValidationAgent:start()
   log.info('ValidationAgent | filling ValMemory ')
-  local reward, rawObservation, terminal = 0, self.env:start(), false
+  local reward, terminal = 0, false
+  local rawObservation, adpType = self.env:start()   -- Todo: pwang8. This has been changed a little for compatibility with CI sim
   local action = 1
   for i=1,self.valSize+1 do
     local observation = self.model:preprocess(rawObservation)
     self.valMemory:store(reward, observation, terminal, action)
     if not terminal then
       action = torch.random(1,self.m)
-      reward, rawObservation, terminal = self.env:step(action - self.actionOffset)
+
+      if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness for CI sim compatibility
+        local adpT = 0
+        if observation[-1][1][-4] > 0.1 then adpT = 1 elseif observation[-1][1][-3] > 0.1 then adpT = 2 elseif observation[-1][1][-2] > 0.1 then adpT = 3 elseif observation[-1][1][-1] > 0.1 then adpT = 4 end
+        assert(adpT >=1 and adpT <= 4)
+        action = torch.random(self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2])
+      end
+
+      reward, rawObservation, terminal, adpType = self.env:step(action - self.actionOffset)
     else
-      reward, rawObservation, terminal = 0, self.env:start(), false
+      reward, terminal = 0, false
+      rawObservation, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
     end
   end
   log.info('ValidationAgent | ValMemory filled')
@@ -80,18 +93,56 @@ function ValidationAgent:eGreedyAction(state)
 
   local Q = self.policyNet_:forward(state):squeeze()
 
-  if torch.uniform() < epsilon then
-    return torch.random(1,self.m)
+  -- If it is CI data, pick up actions according to adpType
+  local adpT = 0
+  if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+    if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
+    assert(adpT >=1 and adpT <= 4)
   end
 
-  local _, maxIdx = Q:max(1)
-  return maxIdx[1]
+  if torch.uniform() < epsilon then
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      return torch.random(self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2])
+    else
+      return torch.random(1,self.m)
+    end
+  end
+
+  if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+    local maxAct = self.CIActAdpBound[adpT][1]
+    local maxActQValue = Q[maxAct]
+    for i=maxAct+1, self.CIActAdpBound[adpT][2] do
+      if Q[i] > maxActQValue then
+        maxActQValue = Q[i]
+        maxAct = i
+      end
+    end
+    return maxAct
+  else
+    local _, maxIdx = Q:max(1)
+    return maxIdx[1]
+  end
 end
 
 
 function ValidationAgent:probabilisticAction(state)
   local __, probability = table.unpack(self.policyNet_:forward(state))
-  return torch.multinomial(probability, 1):squeeze()
+
+  if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+    -- If it is CI data, pick up actions according to adpType
+    local adpT = 0
+    if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
+    assert(adpT >=1 and adpT <= 4)
+    local subAdpActRegion = torch.Tensor(self.CIActAdpBound[adpT][2] - self.CIActAdpBound[adpT][1] + 1):fill(0)
+    probability:squeeze()
+    for i=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+      subAdpActRegion[i-self.CIActAdpBound[adpT][1]+1] = probability[i]
+    end
+    local regAct = torch.multinomial(subAdpActRegion, 1):squeeze()
+    return self.CIActAdpBound[adpT][1] + regAct - 1
+  else
+    return torch.multinomial(probability, 1):squeeze()
+  end
 end
 
 
@@ -108,7 +159,8 @@ function ValidationAgent:validate()
   local valEpisodeScore = 0
   local valTotalScore = 0
 
-  local reward, observation, terminal = 0, self.env:start(), false
+  local reward, terminal = 0, false
+  local observation, adpType = self.env:start()   -- Todo: pwang8. This has been changed a little for compatibility with CI sim
 
   for valStep = 1, self.valSteps do
     observation = self.model:preprocess(observation)
@@ -121,7 +173,8 @@ function ValidationAgent:validate()
       local state = self.stateBuffer:readAll()
 
       local action = self:selectAction(state)
-      reward, observation, terminal = self.env:step(action - self.actionOffset)
+
+      reward, observation, terminal, adpType = self.env:step(action - self.actionOffset)
       valEpisodeScore = valEpisodeScore + reward
     else
       if self.lstm then self.lstm:forget() end
@@ -135,7 +188,8 @@ function ValidationAgent:validate()
 
       -- Start a new episode
       valEpisode = valEpisode + 1
-      reward, observation, terminal = 0, self.env:start(), false
+      reward, terminal = 0, false
+      observation, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
       valTotalScore = valTotalScore + valEpisodeScore -- Only add to total score at end of episode
       valEpisodeScore = reward -- Reset episode score
     end
@@ -234,17 +288,41 @@ end
 
 
 function ValidationAgent:validationStats()
-  local indices = torch.linspace(2, self.valSize+1, self.valSize):long()
+  local indices = self.valMemory:sample() -- local indices = torch.linspace(2, self.valSize+1, self.valSize):long() -- Todo: pwang8. Check correctness
   local states, actions, rewards, transitions, terminals = self.valMemory:retrieve(indices)
 
   local totalV
   if self.a3c then
-    local Vs = self.policyNet_:forward(transitions)[1]
+    local Vs = self.policyNet_:forward(transitions)[1]  -- A3C has 2 outputs, 1st is a float number of V, 2nd is a 1-dim tensor of Q values
     totalV = Vs:sum()
   else
     local QPrimes = self.policyNet_:forward(transitions) -- in real learning targetNet but doesnt matter for validation
-    local VPrime = torch.max(QPrimes, 3)
-    totalV = VPrime:sum()
+    local VPrime = torch.max(QPrimes, 3)  -- for QAgent, net:forward(states) has 2-dim output of size 1*10 (10 acts), right not QPrimes is 3-dim, with 1-dim be batch index. Oh oh, the 1 value might be # of head
+
+    -- If it is CI data, pick up actions according to adpType
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      VPrime = torch.min(QPrimes, 3)
+      for ib=1, QPrimes:size(1) do  -- batch size
+        if terminals[ib] < 1 then -- only need to calculate Q' for non-terminated next states
+          local adpT = 0
+          if transitions[ib][-1][1][1][-4] > 0.1 then adpT = 1 elseif transitions[ib][-1][1][1][-3] > 0.1 then adpT = 2 elseif transitions[ib][-1][1][1][-2] > 0.1 then adpT = 3 elseif transitions[ib][-1][1][1][-1] > 0.1 then adpT = 4 end
+          assert(adpT >=1 and adpT <= 4)
+          for i=1, QPrimes:size(2) do    -- index of head in bootstraps in nn output
+            for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+              if QPrimes[ib][i][j] >= VPrime[ib][i][1] then
+                VPrime[ib][i][1] = QPrimes[ib][i][j]
+              end
+            end
+          end
+        else
+          for i=1, QPrimes:size(2) do
+            VPrime[ib][i][1] = 0
+          end
+        end
+      end
+    end
+
+    totalV = VPrime:sum()       -- I assume both states and transitions have 5 dim, like 32*10*1*1*25, with batchSize 32, histLen 10.
   end
   local avgV = totalV / self.valSize
   self.avgV[#self.avgV + 1] = avgV
@@ -315,7 +393,8 @@ function ValidationAgent:evaluate(display)
   -- Set environment and agent to evaluation mode
   self.env:evaluate()
 
-  local reward, observation, terminal = 0, self.env:start(), false
+  local reward, terminal = 0, false
+  local observation, adpType = self.env:start()   -- Todo: pwang8. This has been changed a little for compatibility with CI sim
 
   -- Report episode score
   local episodeScore = reward
@@ -335,9 +414,10 @@ function ValidationAgent:evaluate(display)
 
     -- Act on environment
     if not terminal then
-      reward, observation, terminal = self.env:step(action - self.actionOffset)
-    else 
-      reward, observation, terminal = 0, self.env:start(), false
+      reward, observation, terminal, adpType = self.env:step(action - self.actionOffset)
+    else
+      reward, terminal = 0, false
+      observation, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
     end
     episodeScore = episodeScore + reward
 

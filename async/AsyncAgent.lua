@@ -70,7 +70,8 @@ end
 
 
 function AsyncAgent:start()
-  local reward, rawObservation, terminal = 0, self.env:start(), false
+  local reward, terminal = 0, false
+  local rawObservation, adpType = self.env:start()   -- Todo: pwang8. This has been changed a little for compatibility with CI sim
   local observation = self.model:preprocess(rawObservation)
   self.stateBuffer:push(observation)
   return reward, terminal, self.stateBuffer:readAll()
@@ -78,7 +79,7 @@ end
 
 
 function AsyncAgent:takeAction(action)
-  local reward, rawObservation, terminal = self.env:step(action - self.actionOffset)
+  local reward, rawObservation, terminal, adpType = self.env:step(action - self.actionOffset)
   if self.rewardClip > 0 then
     reward = math.max(reward, -self.rewardClip)
     reward = math.min(reward, self.rewardClip)

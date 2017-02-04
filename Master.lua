@@ -55,7 +55,7 @@ function Master:_init(opt)
   if opt.game ~= '' then
     log.info('Starting game: ' .. opt.game)
   end
-  local state = self.env:start()
+  local state, adpType = self.env:start()
 
   -- Set up display (if available)
   self.hasDisplay = false
