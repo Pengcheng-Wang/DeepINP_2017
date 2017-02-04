@@ -9,6 +9,8 @@ require 'classic.torch'
 
 local ValidationAgent = classic.class('ValidationAgent')
 
+local TINY_EPSILON = 1e-20
+
 function ValidationAgent:_init(opt, theta, atomic)
   log.info('creating ValidationAgent')
   local asyncModel = AsyncModel(opt)
@@ -139,6 +141,8 @@ function ValidationAgent:probabilisticAction(state)
     for i=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
       subAdpActRegion[i-self.CIActAdpBound[adpT][1]+1] = probability[i]
     end
+    -- Have to make sure subAdpActRegion does not sum up to 0 (all 0s) before sent to multinomial()
+    subAdpActRegion:add(TINY_EPSILON) -- add a small number to this distribution so it will not sum up to 0
     local regAct = torch.multinomial(subAdpActRegion, 1):squeeze()
     return self.CIActAdpBound[adpT][1] + regAct - 1
   else
