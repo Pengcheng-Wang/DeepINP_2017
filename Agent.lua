@@ -174,11 +174,15 @@ function Agent:observe(reward, rawObservation, terminal)
     end
   end
 
+  local actDist = {}  -- Todo: pwang8. Check correctness. This is act selection probability dist (could be used in Importance sampling). Only used in evaluation
   local aIndex = 1 -- In a terminal state, choose no-op/first action by default
   if not terminal then
     if not self.isTraining and self.bootstraps > 0 then
       -- Retrieve estimates from all heads
       local QHeads = self.policyNet:forward(state)  -- QHeads (2-dim) has size (heads_count * action_num)
+
+      -- Calculate the sum of each action's Q values over all heads
+      local actQValSumHeads = QHeads:sum(1):squeeze()
 
       -- Use ensemble policy with bootstrap heads (in evaluation mode)
       local QHeadsMax, QHeadsMaxInds = QHeads:max(2) -- Find max action per head -- torch.mode() is a function returns most frequently appeared element (maths)
@@ -196,6 +200,15 @@ function Agent:observe(reward, rawObservation, terminal)
             end
           end
         end
+
+        -- Calculate the action selection distribution
+        local temQsum = 0
+        for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+          temQsum = temQsum + math.exp(self.opt.actDistT * actQValSumHeads[j])
+        end
+        for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+          actDist[j] = math.exp(self.opt.actDistT * actQValSumHeads[j]) / temQsum
+        end
       end
 
       aIndex = torch.mode(QHeadsMaxInds:float(), 1)[1][1] -- TODO: Torch.CudaTensor:mode is missing
@@ -212,12 +225,27 @@ function Agent:observe(reward, rawObservation, terminal)
     elseif torch.uniform() < epsilon then 
       -- Choose action by ε-greedy exploration (even with bootstraps)
       aIndex = torch.random(1, self.m)
+
+      -- Retrieve estimates from all heads
+      local QHeads = self.policyNet:forward(state)  -- QHeads (2-dim) has size (heads_count * action_num)
+      -- Calculate the sum of each action's Q values over all heads
+      local actQValSumHeads = QHeads:sum(1):squeeze()
+
       -- If it is CI data, pick up actions according to adpType
       if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
         local adpT = 0
         if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
         assert(adpT >=1 and adpT <= 4)
         aIndex = torch.random(self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2])
+
+        -- Calculate the action selection distribution
+        local temQsum = 0
+        for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+          temQsum = temQsum + math.exp(self.opt.actDistT * actQValSumHeads[j])
+        end
+        for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+          actDist[j] = math.exp(self.opt.actDistT * actQValSumHeads[j]) / temQsum
+        end
       end
 
       -- Forward state anyway if recurrent
@@ -261,6 +289,15 @@ function Agent:observe(reward, rawObservation, terminal)
           elseif Qs[a] == maxQ then -- Ties can occur even with floats
             bestAs[#bestAs + 1] = a
           end
+        end
+
+        -- Calculate the action selection distribution
+        local temQsum = 0
+        for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+          temQsum = temQsum + math.exp(self.opt.actDistT * Qs[j])
+        end
+        for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+          actDist[j] = math.exp(self.opt.actDistT * Qs[j]) / temQsum
         end
       end
 
@@ -322,7 +359,7 @@ function Agent:observe(reward, rawObservation, terminal)
   end
 
   -- Return action index with offset applied
-  return aIndex - self.actionOffset
+  return aIndex - self.actionOffset, actDist
 end
 
 -- Learns from experience

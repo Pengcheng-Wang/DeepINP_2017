@@ -419,7 +419,7 @@ function ValidationAgent:evaluate(display)
     end
     -- Observe and choose next action (index)
     local state = self.stateBuffer:readAll()
-    local action = self:selectAction(state)
+    local action = self:selectAction(state)   -- Todo: pwang8. Time to add act selection dist here.
 
     -- Act on environment
     if not terminal then

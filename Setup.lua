@@ -160,8 +160,9 @@ function Setup:parseOptions(arg)
   cmd:option('-uppModel', 'lstm', 'type of model tor train: moe | mlp | linear | lstm')
   cmd:option('-lstmHist', 6, 'lstm history length used for uap and usp')
   cmd:option('-lstmHd', 192, 'lstm hidden layer size')
+  cmd:option('-actDistT', 100, 'The temperature hyper-param used in softmax of importance sampling')
   cmd:option('-ciunet', '', 'the pretrained network for user acts/scores predictor, should not be used')
-  cmd:option('save', 'upplogs', 'subdirectory to save logs')
+  cmd:option('-save', 'upplogs', 'subdirectory to save logs')
 
   local opt = cmd:parse(arg)
 
