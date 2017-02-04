@@ -221,6 +221,10 @@ function ValidationAgent:validate()
   local avgV = self:validationStats()
   log.info('Average V: ' .. avgV)
 
+  -- Save latest weights
+  log.info('Saving weights')
+  self:saveWeights('last')
+
   if valAvgScore > self.bestValScore then
     log.info('New best average score')
     self.bestValScore = valAvgScore
