@@ -37,7 +37,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     for i=1, CIUserSimulator.CIFr.usrActInd_end do classes[i] = i end
     self.inputFeatureNum = CIUserSimulator.realUserDataStates[1]:size()[1]
 
-    if opt.network == '' then
+    if opt.ciunet == '' then
         -- define model to train
         self.model = nn.Sequential()
 
@@ -121,8 +121,8 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
         end
     else
-        print('<trainer> reloading previously trained network')
-        self.model = torch.load(opt.network)
+        print('<trainer> reloading previously trained ciunet')
+        self.model = torch.load(opt.ciunet)
     end
 
 --    -- verbose
@@ -477,7 +477,7 @@ function CIUserActsPredictor:trainOneEpoch()
     if paths.filep(filename) then
         os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
     end
-    print('<trainer> saving network to '..filename)
+    print('<trainer> saving ciunet to '..filename)
     torch.save(filename, self.model)
 
     -- next epoch

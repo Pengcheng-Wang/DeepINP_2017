@@ -7,7 +7,7 @@ local CIUserBehaviorGenerator = require 'UserSimLearner/UserBehaviorGenerator'
 opt = lapp[[
        --trType         (default "rl")           training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API)
        -s,--save          (default "upplogs")      subdirectory to save logs
-       -n,--network       (default "")          reload pretrained network
+       -n,--ciunet       (default "")          reload pretrained CI user simulation network
        -m,--uppModel         (default "lstm")   type of model tor train: moe | mlp | linear | lstm
        -f,--full                                use the full dataset
        -p,--plot                                plot while training
