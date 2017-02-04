@@ -53,6 +53,7 @@ function ValidationAgent:_init(opt, theta, atomic)
   self.a3c = opt.async == 'A3C'
   if self.a3c then self.selectAction = self.probabilisticAction end
 
+  self.opt = opt
   -- Sorry, adding ugly code here again, just for CI data compatability
   self.CIActAdpBound = {{1, 3}, {4, 5}, {6, 8}, {9, 10}}
 

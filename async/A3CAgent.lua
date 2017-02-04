@@ -159,6 +159,7 @@ function A3CAgent:probabilisticAction(state)  -- Todo: pwang8. Check correctness
     for i=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
       subAdpActRegion[i-self.CIActAdpBound[adpT][1]+1] = probability[i]
     end
+  print('A3C check ###', subAdpActRegion, 'state: ', state, 'adpType:', adpT)
     local regAct = torch.multinomial(subAdpActRegion, 1):squeeze()
     return self.CIActAdpBound[adpT][1] + regAct - 1
   else
