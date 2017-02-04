@@ -28,6 +28,10 @@ function A3CAgent:_init(opt, policyNet, targetNet, theta, targetTheta, atomic, s
 
   self.env:training()
 
+  self.opt = opt
+  -- Sorry, adding ugly code here again, just for CI data compatability
+  self.CIActAdpBound = {{1, 3}, {4, 5}, {6, 8}, {9, 10}}
+
   classic.strict(self)
 end
 
