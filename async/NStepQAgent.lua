@@ -66,11 +66,44 @@ end
 function NStepQAgent:accumulateGradients(terminal, state)
   local R = 0
   if not terminal then
-    local QPrimes = self.targetNet:forward(state):squeeze()
-    local APrimeMax = QPrimes:max(1):squeeze()
+    local QPrimes = self.targetNet:forward(state):squeeze()   -- It seems list NStepQ does not support bootstrapping right now.
+    local APrimeMax = QPrimes:squeeze():max(1)    -- So, QPrime is a 1-dim tensor with size 10 (acts)
+
+    -- If it is CI data, pick up actions according to adpType
+    local adpT = 0
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
+      assert(adpT >=1 and adpT <= 4)
+    end
+
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      local maxAct = self.CIActAdpBound[adpT][1]
+      local maxActQValue = QPrimes[maxAct]
+      for i=maxAct+1, self.CIActAdpBound[adpT][2] do
+        if QPrimes[i] > maxActQValue then
+          maxActQValue = QPrimes[i]
+          maxAct = i
+        end
+      end
+      APrimeMax = maxActQValue
+    end
 
     if self.doubleQ then
-        local _,APrimeMaxInds = self.policyNet_:forward(state):squeeze():max(1)
+        local dqQPrimes = self.policyNet_:forward(state):squeeze()
+        local _,APrimeMaxInds = dqQPrimes:max(1)
+
+        if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+          local maxAct = self.CIActAdpBound[adpT][1]
+          local maxActQValue = dqQPrimes[maxAct]
+          for i=maxAct+1, self.CIActAdpBound[adpT][2] do
+            if dqQPrimes[i] > maxActQValue then
+              maxActQValue = dqQPrimes[i]
+              maxAct = i
+            end
+          end
+          APrimeMaxInds[1] = maxAct
+        end
+
         APrimeMax = QPrimes[APrimeMaxInds[1]]
     end
     R = APrimeMax

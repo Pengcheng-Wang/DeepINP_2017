@@ -50,8 +50,9 @@ function A3CAgent:learn(steps, from)
       self.batchIdx = self.batchIdx + 1
       self.states[self.batchIdx]:copy(state)
 
-      local V, probability = table.unpack(self.policyNet_:forward(state)) -- For CI sim, V is a 1-dim, size-1 tensor, probability is a 1-dim, size-10 (act#) tensor.
-      local action = torch.multinomial(probability, 1):squeeze()
+--      local V, probability = table.unpack(self.policyNet_:forward(state)) -- For CI sim, V is a 1-dim, size-1 tensor, probability is a 1-dim, size-10 (act#) tensor.
+--      local action = torch.multinomial(probability, 1):squeeze()
+      local action = self:probabilisticAction(state)  -- Todo: pwang8. Check correctness
 
       self.actions[self.batchIdx] = action
 
@@ -87,6 +88,21 @@ function A3CAgent:accumulateGradients(terminal, state)
     local V, probability = table.unpack(self.policyNet_:forward(self.states[i]))
     probability:add(TINY_EPSILON) -- could contain 0 -> log(0)= -inf -> theta = nans
 
+    local adpT = 0
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      -- If it is CI data, pick up actions according to adpType
+      if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
+      assert(adpT >=1 and adpT <= 4)
+      for i=1, probability:size(1) do
+        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+          probability[i] = 0
+        end
+      end
+      local sumP = probability:sum()
+      probability = torch.div(probability, sumP)
+      probability:add(TINY_EPSILON)
+    end
+
     self.vTarget[1] = -0.5 * (R - V)
 
     -- ∇θ logp(s) = 1/p(a) for chosen a, 0 otherwise
@@ -96,6 +112,15 @@ function A3CAgent:accumulateGradients(terminal, state)
 
     -- Calculate (negative of) gradient of entropy of policy (for gradient descent): -(-logp(s) - 1)
     local gradEntropy = torch.log(probability) + 1
+
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      for i=1, gradEntropy:size(1) do
+        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+          gradEntropy[i] = 0
+        end
+      end
+    end
+
     -- Add to target to improve exploration (prevent convergence to suboptimal deterministic policy)
     self.policyTarget:add(self.beta, gradEntropy)
     
@@ -113,6 +138,27 @@ function A3CAgent:progress(steps)
     self.tic = torch.tic()
     log.info('A3CAgent | step=%d | %.02f%% | speed=%d/sec | η=%.8f',
       self.step, progressPercent, speed, self.optimParams.learningRate)
+  end
+end
+
+
+function A3CAgent:probabilisticAction(state)  -- Todo: pwang8. Check correctness. This is borrowed from ValidationAgent
+  local __, probability = table.unpack(self.policyNet_:forward(state))
+
+  if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+    -- If it is CI data, pick up actions according to adpType
+    local adpT = 0
+    if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
+    assert(adpT >=1 and adpT <= 4)
+    local subAdpActRegion = torch.Tensor(self.CIActAdpBound[adpT][2] - self.CIActAdpBound[adpT][1] + 1):fill(0)
+    probability:squeeze()
+    for i=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+      subAdpActRegion[i-self.CIActAdpBound[adpT][1]+1] = probability[i]
+    end
+    local regAct = torch.multinomial(subAdpActRegion, 1):squeeze()
+    return self.CIActAdpBound[adpT][1] + regAct - 1
+  else
+    return torch.multinomial(probability, 1):squeeze()
   end
 end
 

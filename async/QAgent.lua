@@ -37,6 +37,10 @@ function QAgent:_init(opt, policyNet, targetNet, theta, targetTheta, atomic, sha
   self.alwaysComputeGreedyQ = opt.recurrent or not self.doubleQ
 
   self.QCurr = torch.Tensor(0)
+
+  self.opt = opt
+  -- Sorry, adding ugly code here again, just for CI data compatability
+  self.CIActAdpBound = {{1, 3}, {4, 5}, {6, 8}, {9, 10}}
 end
 
 
@@ -55,21 +59,45 @@ end
 
 function QAgent:eGreedy(state, net)
   self.epsilon = math.max(self.epsilonStart + (self.step - 1)*self.epsilonGrad, self.epsilonEnd)
-  -- output for net:forward(state) has 2-dim size 1*10 (10 acts). After squeeze() it is 1-dim of size 10
+  -- When bootstraps is 0 (1 head), size of state is 4*1*25, with 4 the histLen, 1 being # of head, 25 the # of features of state
+  -- output for net:forward(state) has 2-dim size 1*10 (10 acts). After squeeze() it is 1-dim of size 10. The 1 should be # of head
   if self.alwaysComputeGreedyQ then
     self.QCurr = net:forward(state):squeeze()
   end
 
+  -- If it is CI data, pick up actions according to adpType
+  local adpT = 0
+  if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+    if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
+    assert(adpT >=1 and adpT <= 4)
+  end
+
   if torch.uniform() < self.epsilon then
-    return torch.random(1,self.m)
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+      return torch.random(self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2])
+    else
+      return torch.random(1,self.m)
+    end
   end
 
   if not self.alwaysComputeGreedyQ then
     self.QCurr = net:forward(state):squeeze()
   end
 
-  local _, maxIdx = self.QCurr:max(1)
-  return maxIdx[1]
+  if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+    local maxAct = self.CIActAdpBound[adpT][1]
+    local maxActQValue = self.QCurr[maxAct]
+    for i=maxAct+1, self.CIActAdpBound[adpT][2] do
+      if self.QCurr[i] > maxActQValue then
+        maxActQValue = self.QCurr[i]
+        maxAct = i
+      end
+    end
+    return maxAct
+  else
+    local _, maxIdx = self.QCurr:max(1) --Q:max(1)
+    return maxIdx[1]
+  end
 end
 
 
