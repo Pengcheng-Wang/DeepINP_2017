@@ -3,9 +3,10 @@ local CIUserSimulator = require 'UserSimulator'
 local CIUserActsPredictor = require 'UserSimLearner/UserActsPredictor'
 local CIUserScorePredictor = require 'UserSimLearner/UserScorePredictor'
 local CIUserBehaviorGenerator = require 'UserSimLearner/UserBehaviorGenerator'
+local CIUserBehaviorGenEvaluator = require 'UserSimLearner/UserBehaviorGenEvaluator'
 
 opt = lapp[[
-       --trType         (default "rl")           training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API)
+       --trType         (default "rl")           training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API) | ev (evaluation of act/score prediction)
        -s,--save          (default "upplogs")      subdirectory to save logs
        -n,--ciunet       (default "")          reload pretrained CI user simulation network
        -m,--uppModel         (default "lstm")   type of model to train: moe | mlp | linear | lstm
@@ -28,6 +29,7 @@ opt = lapp[[
        --uspFile          (default "usp.t7")          file storing userScorePredictor model
        --actSmpLen        (default 6)           The sampling candidate list length for user action generation
        --ciuTType         (default "train")     Training or testing for use sim model train | test
+       --actEvaScp        (default 1)           The action selection range in prediction evaluation calculation
     ]]
 
 -- threads and default tensor type
@@ -83,6 +85,10 @@ elseif opt.trType == 'rl' then
         score, obv, term, adpType = CIUserBehaviorGen:step(rndAdpAct)
         print('^### Outside in main\n state:', obv, '\n type:', adpType, '\n score:', score, ',term:', term)
     end
+elseif opt.trType == 'ev' then
+    local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
+    local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
+    local CIUserBehaviorGen = CIUserBehaviorGenEvaluator(CIUserModel, CIUserActsPred, CIUserScorePred, opt)
 end
 
 
