@@ -29,7 +29,7 @@ function CIUserSimEnv:_init(opt)
     fr:evaluateSurveyData()
 
     -- Construct CI user simulator model using real user data
-    local CIUserModel = CIUserSimulator(fr)
+    local CIUserModel = CIUserSimulator(fr, opt)
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
 

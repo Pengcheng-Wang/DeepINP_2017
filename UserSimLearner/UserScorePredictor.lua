@@ -496,11 +496,18 @@ function CIUserScorePredictor:trainOneEpoch()
     -- save/log current net
     local filename = paths.concat(self.opt.save, 'usp.t7')
     os.execute('mkdir -p ' .. sys.dirname(filename))
-    if paths.filep(filename) then
-        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
-    end
+--    if paths.filep(filename) then
+--        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
+--    end
     print('<trainer> saving ciunet to '..filename)
     torch.save(filename, self.model)
+
+    if self.trainEpoch % 20 == 0 then
+        filename = string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..filename
+        os.execute('mkdir -p ' .. sys.dirname(filename))
+        print('<trainer> saving periodly trained ciunet to '..filename)
+        torch.save(filename, self.model)
+    end
 
     -- next epoch
     self.trainEpoch = self.trainEpoch + 1

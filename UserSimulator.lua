@@ -12,7 +12,7 @@ local TableSet = require 'MyMisc.TableSetMisc'
 
 local CIUserSimulator = classic.class('UserSimulator')
 
-function CIUserSimulator:_init(CIFileReader)
+function CIUserSimulator:_init(CIFileReader, opt)
     self.realUserDataStates = {}
     self.realUserDataActs = {}
     self.realUserDataRewards = {}
@@ -21,6 +21,39 @@ function CIUserSimulator:_init(CIFileReader)
     self.realUserDataEndLines = {}
 
     self.userStateFeatureCnt = CIFileReader.userStateGamePlayFeatureCnt + CIFileReader.userStateSurveyFeatureCnt    -- 18+3 now
+
+    self.opt = opt
+    -- test for splitting corpus into training and testing
+    local ite = 1
+    if self.opt.ciuTType == 'train' then
+        for userId, userRcd in pairs(CIFileReader.traceData) do
+            if ite % 5 == 2 then
+                CIFileReader.traceData[userId] = nil
+            end
+            ite = ite + 1
+        end
+    else
+        for userId, userRcd in pairs(CIFileReader.traceData) do
+            if ite % 5 ~= 2 then
+                CIFileReader.traceData[userId] = nil
+            end
+            ite = ite + 1
+        end
+    end
+
+    local above, below = 0, 0
+    for userId, userRcd in pairs(CIFileReader.traceData) do
+        if CIFileReader.surveyData[userId][CIFileReader.userStateSurveyFeatureCnt+1] > 0.16666667 then
+            above = above + 1
+        else
+            below = below + 1
+        end
+    end
+    print('In '.. self.opt.ciuTType .. ' set, pos pt:', above, ', neg pt:', below)
+    -- Use the above method to divide corpus into training and testing, the original corpus is
+    -- almost pretty evenly divided wrt nlg/rewards.
+    -- The total 402 records corpus has 200 above median nlg records, and 202 equal or below media records.
+    -- Using the above splitting method, there are 161 pos, 160 neg in training set, and 39 pos, 42 neg in test set.
 
     for userId, userRcd in pairs(CIFileReader.traceData) do
 

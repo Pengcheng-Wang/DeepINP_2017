@@ -8,7 +8,7 @@ opt = lapp[[
        --trType         (default "rl")           training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API)
        -s,--save          (default "upplogs")      subdirectory to save logs
        -n,--ciunet       (default "")          reload pretrained CI user simulation network
-       -m,--uppModel         (default "lstm")   type of model tor train: moe | mlp | linear | lstm
+       -m,--uppModel         (default "lstm")   type of model to train: moe | mlp | linear | lstm
        -f,--full                                use the full dataset
        -p,--plot                                plot while training
        -o,--optimization  (default "adam")       optimization: SGD | LBFGS | adam | rmsprop
@@ -27,6 +27,7 @@ opt = lapp[[
        --uapFile          (default "uap.t7")          file storing userActsPredictor model
        --uspFile          (default "usp.t7")          file storing userScorePredictor model
        --actSmpLen        (default 6)           The sampling candidate list length for user action generation
+       --ciuTType         (default "train")     Training or testing for use sim model train | test
     ]]
 
 -- threads and default tensor type
@@ -39,7 +40,7 @@ fr:evaluateTraceFile()
 fr:evaluateSurveyData()
 
 -- Construct CI user simulator model using real user data
-local CIUserModel = CIUserSimulator(fr)
+local CIUserModel = CIUserSimulator(fr, opt)
 
 if opt.trType == 'sc' then
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
