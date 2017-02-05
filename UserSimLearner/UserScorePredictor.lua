@@ -491,7 +491,7 @@ function CIUserScorePredictor:trainOneEpoch()
             ' + global correct: ' .. (self.uspConfusion.totalValid*100) .. '%'
     print(confMtxStr)
     self.uspTrainLogger:add{['% mean class accuracy (train set)'] = self.uspConfusion.totalValid * 100}
-    self.uspConfusion:zero()
+
 
     -- save/log current net
     local filename = paths.concat(self.opt.save, 'usp.t7')
@@ -503,12 +503,13 @@ function CIUserScorePredictor:trainOneEpoch()
     torch.save(filename, self.model)
 
     if self.trainEpoch % 20 == 0 then
-        filename = string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..filename
+        filename = paths.concat(self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'usp.t7')
         os.execute('mkdir -p ' .. sys.dirname(filename))
         print('<trainer> saving periodly trained ciunet to '..filename)
         torch.save(filename, self.model)
     end
 
+    self.uspConfusion:zero()
     -- next epoch
     self.trainEpoch = self.trainEpoch + 1
 end
