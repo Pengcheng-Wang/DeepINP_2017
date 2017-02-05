@@ -119,29 +119,44 @@ function Validation:evaluate()
   self.env:evaluate()
   self.agent:evaluate()
 
+  -- Start new game
   local reward, terminal = 0, false
   local state, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
 
-  -- Report episode score
-  local episodeScore = reward
+  -- Validation variables
+  local valEpisode = 1
+  local valEpisodeScore = 0
+  local valTotalScore = 0
+  local valStep = 1
+  local valStepStrFormat = '%0' .. (math.floor(math.log10(self.opt.valSteps)) + 1) .. 'd' -- String format for padding step with zeros
 
-  -- Play one game (episode)
-  local step = 1
-  while not terminal do
+  while valEpisode <= self.opt.evaTrajs do
     -- Observe and choose next action (index)
-    action = self.agent:observe(reward, state, terminal)
-    -- Act on environment
-    reward, state, terminal, adpType = self.env:step(action)
-    episodeScore = episodeScore + reward
+    local action = self.agent:observe(reward, state, terminal)
+    if not terminal then
+      -- Act on environment
+      reward, state, terminal, adpType = self.env:step(action)
+      -- Track score
+      valEpisodeScore = valEpisodeScore + reward
+    else
+      -- Print score every 10 episodes
+      if valEpisode % 10 == 0 then
+        local avgScore = valTotalScore/math.max(valEpisode - 1, 1)
+        log.info('[VAL] Steps: ' .. valStep .. ' | Episode ' .. valEpisode .. ' | Score: ' .. valEpisodeScore
+            .. ' | TotScore: ' .. valTotalScore .. ' | AvgScore: %.2f', avgScore)
+      end
 
-    -- Record (if available)
-    if self.hasDisplay then
-      self.display:display(self.agent, self.env:getDisplay(), step)
+      -- Start a new episode
+      valEpisode = valEpisode + 1
+      reward, terminal = 0, false
+      state, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
+      valTotalScore = valTotalScore + valEpisodeScore -- Only add to total score at end of episode
+      valEpisodeScore = reward -- Reset episode score
     end
-    -- Increment evaluation step counter
-    step = step + 1
+    valStep = valStep + 1
   end
-  log.info('Final Score: ' .. episodeScore)
+
+  log.info('[VAL] Final evaluation avg score: ', valTotalScore/self.opt.evaTrajs)
 
   -- Record (if available)
   if self.hasDisplay then

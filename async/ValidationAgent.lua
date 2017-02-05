@@ -96,18 +96,28 @@ function ValidationAgent:eGreedyAction(state)
 
   local Q = self.policyNet_:forward(state):squeeze()
 
+  local actDist = {}  -- Todo: pwang8. Check correctness. This is act selection probability dist (could be used in Importance sampling). Only used in evaluation
   -- If it is CI data, pick up actions according to adpType
   local adpT = 0
   if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
     if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
     assert(adpT >=1 and adpT <= 4)
+
+    -- Calculate the action selection distribution
+    local temQsum = 0
+    for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+      temQsum = temQsum + math.exp(self.opt.actDistT * Q[j])
+    end
+    for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+      actDist[j] = math.exp(self.opt.actDistT * Q[j]) / temQsum
+    end
   end
 
   if torch.uniform() < epsilon then
     if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
-      return torch.random(self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2])
+      return torch.random(self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2]), actDist
     else
-      return torch.random(1,self.m)
+      return torch.random(1,self.m), actDist
     end
   end
 
@@ -120,10 +130,10 @@ function ValidationAgent:eGreedyAction(state)
         maxAct = i
       end
     end
-    return maxAct
+    return maxAct, actDist
   else
     local _, maxIdx = Q:max(1)
-    return maxIdx[1]
+    return maxIdx[1], actDist
   end
 end
 
@@ -131,6 +141,7 @@ end
 function ValidationAgent:probabilisticAction(state)
   local __, probability = table.unpack(self.policyNet_:forward(state))
 
+  local actDist = {}  -- Todo: pwang8. Check correctness. This is act selection probability dist (could be used in Importance sampling). Only used in evaluation
   if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
     -- If it is CI data, pick up actions according to adpType
     local adpT = 0
@@ -140,13 +151,14 @@ function ValidationAgent:probabilisticAction(state)
     probability:squeeze()
     for i=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
       subAdpActRegion[i-self.CIActAdpBound[adpT][1]+1] = probability[i]
+      actDist[i] = probability[i] + TINY_EPSILON
     end
     -- Have to make sure subAdpActRegion does not sum up to 0 (all 0s) before sent to multinomial()
     subAdpActRegion:add(TINY_EPSILON) -- add a small number to this distribution so it will not sum up to 0
     local regAct = torch.multinomial(subAdpActRegion, 1):squeeze()
-    return self.CIActAdpBound[adpT][1] + regAct - 1
+    return self.CIActAdpBound[adpT][1] + regAct - 1, actDist
   else
-    return torch.multinomial(probability, 1):squeeze()
+    return torch.multinomial(probability, 1):squeeze(), probability:add(TINY_EPSILON):totable()
   end
 end
 
@@ -396,47 +408,58 @@ end
 
 
 function ValidationAgent:evaluate(display)
-  self.theta_:copy(self.theta)
-
   log.info('Evaluation mode')
-  -- Set environment and agent to evaluation mode
+
+  self.theta_:copy(self.theta)
+  if self.lstm then self.lstm:forget() end
+
+  self.stateBuffer:clear()
   self.env:evaluate()
+  self.policyNet_:evaluate()
+
+  local valEpisode = 1
+  local valEpisodeScore = 0
+  local valTotalScore = 0
+  local valStep = 1
 
   local reward, terminal = 0, false
   local observation, adpType = self.env:start()   -- Todo: pwang8. This has been changed a little for compatibility with CI sim
 
-  -- Report episode score
-  local episodeScore = reward
-
-  -- Play one game (episode)
-  local step = 1
-  while not terminal do
+  while valEpisode <= self.opt.evaTrajs do
     observation = self.model:preprocess(observation)
     if terminal then
-      self.stateBuffer:pushReset(observation)
+      self.stateBuffer:clear()
     else
       self.stateBuffer:push(observation)
     end
-    -- Observe and choose next action (index)
-    local state = self.stateBuffer:readAll()
-    local action = self:selectAction(state)   -- Todo: pwang8. Time to add act selection dist here.
-
-    -- Act on environment
     if not terminal then
+      local state = self.stateBuffer:readAll()
+
+      local action = self:selectAction(state)
+
       reward, observation, terminal, adpType = self.env:step(action - self.actionOffset)
+      valEpisodeScore = valEpisodeScore + reward
     else
+      if self.lstm then self.lstm:forget() end
+
+      -- Print score every 10 episodes
+      if valEpisode % 10 == 0 then
+        local avgScore = valTotalScore/math.max(valEpisode - 1, 1)
+        log.info('[VAL] Steps: ' .. valStep .. ' | Episode ' .. valEpisode
+                .. ' | Score: ' .. valEpisodeScore .. ' | TotScore: ' .. valTotalScore .. ' | AvgScore: %.2f', avgScore)
+      end
+
+      -- Start a new episode
+      valEpisode = valEpisode + 1
       reward, terminal = 0, false
       observation, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
+      valTotalScore = valTotalScore + valEpisodeScore -- Only add to total score at end of episode
+      valEpisodeScore = reward -- Reset episode score
     end
-    episodeScore = episodeScore + reward
-
-    if display then
-      display:display(self, self.env:getDisplay(), step)
-    end
-    -- Increment evaluation step counter
-    step = step + 1
+    valStep = valStep + 1
   end
-  log.info('Final Score: ' .. episodeScore)
+
+  log.info('[VAL] Final evaluation avg score: ', valTotalScore/self.opt.evaTrajs)
 
   if display then
     display:createVideo()

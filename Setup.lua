@@ -132,6 +132,7 @@ function Setup:parseOptions(arg)
   cmd:option('-valFreq', 250000, 'Interval of steps between validating agent') -- valFreq steps is used as an epoch, hence #epochs = steps/valFreq
   cmd:option('-valSteps', 125000, 'Number of steps to use for validation')
   cmd:option('-valSize', 500, 'Number of transitions to use for calculating validation statistics')
+  cmd:option('-evaTrajs', 500, 'Number of trajectories to use for evaluation')
   -- Async options
   cmd:option('-async', '', 'Async agent: <none>|Sarsa|OneStepQ|NStepQ|A3C') -- TODO: Change names
   cmd:option('-rmsEpsilon', 0.1, 'Epsilon for sharedRmsProp')
