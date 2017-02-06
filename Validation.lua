@@ -156,7 +156,7 @@ function Validation:evaluate()
     valStep = valStep + 1
   end
 
-  log.info('[VAL] Final evaluation avg score: ', valTotalScore/self.opt.evaTrajs)
+  log.info('[VAL] Final evaluation avg score: ' .. valTotalScore/self.opt.evaTrajs)
 
   -- Record (if available)
   if self.hasDisplay then
@@ -193,7 +193,7 @@ function Validation:ISevaluate()
     totalScoreIs = totalScoreIs + weight
   end
 
-  log.info('Importance Sampling rewards on test set: ', totalScoreIs)
+  log.info('Importance Sampling rewards on test set: ' .. totalScoreIs)
 end
 
 
