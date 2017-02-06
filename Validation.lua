@@ -165,4 +165,36 @@ function Validation:evaluate()
 end
 
 
+function Validation:ISevaluate()
+  log.info('IS Evaluation mode')
+  -- Set environment and agent to evaluation mode
+  self.env:evaluate()
+  self.agent:evaluate()
+
+  local userSim = self.env.CIUSim
+
+  local totalScoreIs = 0
+  for uid, uRec in pairs(userSim.realUserRLTerms) do
+    local rwd = userSim.realUserRLRewards[uid][1]
+    local weight = 1.0
+    for k, v in pairs(uRec) do
+      if v < 1 then -- not terminal
+        local action, actDist = self.agent:observe(0, userSim.realUserRLStatePrepInd[uid][k], false)
+        local randprob = 0.333333
+        if userSim.realUserRLTypes[uid][k] == userSim.CIFr.ciAdp_BryceSymp or
+                userSim.realUserRLTypes[uid][k] == userSim.CIFr.ciAdp_PresentQuiz then
+          randprob = 0.5
+        end
+        weight = weight * (actDist[userSim.realUserRLActs[uid][k]] / randprob)
+      else  -- terminal
+        weight = weight * rwd -- rwd can be -1 or 1
+      end
+    end
+    totalScoreIs = totalScoreIs + weight
+  end
+
+  log.info('Importance Sampling rewards on test set: ', totalScoreIs)
+end
+
+
 return Validation

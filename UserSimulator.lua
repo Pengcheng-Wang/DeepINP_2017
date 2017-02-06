@@ -20,6 +20,14 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.realUserDataStartLines = {}    -- this table stores the starting line of each real human user's interation
     self.realUserDataEndLines = {}
 
+    -- The following tables are used by rl evaluations
+    self.realUserRLStates = {}
+    self.realUserRLStatePrepInd = {}
+    self.realUserRLActs = {}
+    self.realUserRLRewards = {}
+    self.realUserRLTerms = {}
+    self.realUserRLTypes = {}
+
     self.userStateFeatureCnt = CIFileReader.userStateGamePlayFeatureCnt + CIFileReader.userStateSurveyFeatureCnt    -- 18+3 now
 
     self.opt = opt
@@ -65,6 +73,13 @@ function CIUserSimulator:_init(CIFileReader, opt)
             self.realUserDataStates[#self.realUserDataStates][CIFileReader.userStateGamePlayFeatureCnt+i] = CIFileReader.surveyData[userId][i]
         end
 
+        -- Init RL data table
+        self.realUserRLStates[userId] = {}
+        self.realUserRLActs[userId] = {}
+        self.realUserRLRewards[userId] = {}
+        self.realUserRLTerms[userId] = {}
+        self.realUserRLTypes[userId] = {}
+
         for time, act in ipairs(userRcd) do
             self.realUserDataActs[#self.realUserDataStates] = act
 --            print('#', userId, self.realUserDataStates[#self.realUserDataStates], ',', self.realUserDataActs[#self.realUserDataStates])
@@ -77,6 +92,21 @@ function CIUserSimulator:_init(CIFileReader, opt)
 
             if act == CIFileReader.usrActInd_end then
 --                print('@@ End action reached')
+                if #self.realUserRLTerms[userId] > 0 then
+                    -- RL acts in real user data
+                    self.realUserRLActs[userId][#self.realUserRLActs[userId]+1] = 1 -- it is fake, just for terminal state. No real action needed
+                    -- This is used for constructing realUserRLData tables
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]+1] = self.realUserDataStates[#self.realUserDataStates]:clone()
+                    self.realUserRLRewards[userId][#self.realUserRLRewards[userId]+1] = 3 - 2*self.realUserDataRewards[#self.realUserDataStates-1] -- y = 3-2x
+                    self.realUserRLTerms[userId][#self.realUserRLTerms[userId]+1] = 1
+                    self.realUserRLTypes[userId][#self.realUserRLTypes[userId]+1] = 0  -- it is a dumb adpType
+                else
+                    self.realUserRLStates[userId] = nil
+                    self.realUserRLActs[userId] = nil
+                    self.realUserRLRewards[userId] = nil
+                    self.realUserRLTerms[userId] = nil
+                    self.realUserRLTypes[userId] = nil
+                end
             else
                 -- set the next time step state set
                 self.realUserDataStates[#self.realUserDataStates + 1] = self.realUserDataStates[#self.realUserDataStates]:clone()
@@ -84,25 +114,90 @@ function CIUserSimulator:_init(CIFileReader, opt)
                 if act == CIFileReader.usrActInd_askTeresaSymp then
                     self.realUserDataStates[#self.realUserDataStates][CIFileReader.usrStateFeatureInd_TeresaSymp] =
                         (4 - CIFileReader.AdpTeresaSymptomAct[userId][time]) / 3.0  -- (act1--1.0, act3--0.33). So y=(4-x)/3
+
+                    -- RL acts in real user data
+                    self.realUserRLActs[userId][#self.realUserRLActs[userId]+1] = CIFileReader.AdpTeresaSymptomAct[userId][time]
+                    -- This is used for constructing realUserRLData tables
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]+1] = self.realUserDataStates[#self.realUserDataStates]:clone()
+                    self.realUserRLRewards[userId][#self.realUserRLRewards[userId]+1] = 3 - 2*self.realUserDataRewards[#self.realUserDataStates-1] -- y = 3-2x
+                    self.realUserRLTerms[userId][#self.realUserRLTerms[userId]+1] = 0
+                    -- Add this 1 user's act to RL states, bcz adp act is triggered after this user's act
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] = self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] + 1
+                    self.realUserRLTypes[userId][#self.realUserRLTypes[userId]+1] = self.CIFr.ciAdp_TeresaSymp
                 elseif act == CIFileReader.usrActInd_askBryceSymp then
                     self.realUserDataStates[#self.realUserDataStates][CIFileReader.usrStateFeatureInd_BryceSymp] =
                         (3 - CIFileReader.AdpBryceSymptomAct[userId][time]) / 2.0  -- (act1--1.0, act2--0.5). So y=(3-x)/2
+
+                    -- RL acts in real user data
+                    self.realUserRLActs[userId][#self.realUserRLActs[userId]+1] =
+                        CIFileReader.AdpBryceSymptomAct[userId][time] + self.CIFr.ciAdpActRange_BryceSymp[1] - 1
+                    -- This is used for constructing realUserRLData tables
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]+1] = self.realUserDataStates[#self.realUserDataStates]:clone()
+                    self.realUserRLRewards[userId][#self.realUserRLRewards[userId]+1] = 3 - 2*self.realUserDataRewards[#self.realUserDataStates-1] -- y = 3-2x
+                    self.realUserRLTerms[userId][#self.realUserRLTerms[userId]+1] = 0
+                    -- Add this 1 user's act to RL states, bcz adp act is triggered after this user's act
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] = self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] + 1
+                    self.realUserRLTypes[userId][#self.realUserRLTypes[userId]+1] = self.CIFr.ciAdp_BryceSymp
                 elseif act == CIFileReader.usrActInd_talkQuentin and
                         self.realUserDataStates[#self.realUserDataStates][CIFileReader.usrActInd_KimLetQuentinRevealActOne] < 1 and
                         self.realUserDataStates[#self.realUserDataStates][CIFileReader.usrActInd_talkQuentin] < 1 then
                     self.realUserDataStates[#self.realUserDataStates][CIFileReader.usrStateFeatureInd_PresentQuiz] =
                             (2 - CIFileReader.AdpPresentQuizAct[userId][time])  -- act1-quiz-1.0, act2-no_quiz-0. y=2-x
+
+                    -- RL acts in real user data
+                    self.realUserRLActs[userId][#self.realUserRLActs[userId]+1] =
+                        CIFileReader.AdpPresentQuizAct[userId][time] + self.CIFr.ciAdpActRange_PresentQuiz[1] - 1
+                    -- This is used for constructing realUserRLData tables
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]+1] = self.realUserDataStates[#self.realUserDataStates]:clone()
+                    self.realUserRLRewards[userId][#self.realUserRLRewards[userId]+1] = 3 - 2*self.realUserDataRewards[#self.realUserDataStates-1] -- y = 3-2x
+                    self.realUserRLTerms[userId][#self.realUserRLTerms[userId]+1] = 0
+                    -- Add this 1 user's act to RL states, bcz adp act is triggered after this user's act
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] = self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] + 1
+                    self.realUserRLTypes[userId][#self.realUserRLTypes[userId]+1] = self.CIFr.ciAdp_PresentQuiz
                 elseif act == CIFileReader.usrActInd_talkRobert and
                         self.realUserDataStates[#self.realUserDataStates][CIFileReader.usrActInd_talkRobert] < 1 then
                     self.realUserDataStates[#self.realUserDataStates][CIFileReader.usrStateFeatureInd_PresentQuiz] =
                         (2 - CIFileReader.AdpPresentQuizAct[userId][time])  -- act1-quiz-1.0, act2-no_quiz-0. y=2-x
+
+                    -- RL acts in real user data
+                    self.realUserRLActs[userId][#self.realUserRLActs[userId]+1] =
+                        CIFileReader.AdpPresentQuizAct[userId][time] + self.CIFr.ciAdpActRange_PresentQuiz[1] - 1
+                    -- This is used for constructing realUserRLData tables
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]+1] = self.realUserDataStates[#self.realUserDataStates]:clone()
+                    self.realUserRLRewards[userId][#self.realUserRLRewards[userId]+1] = 3 - 2*self.realUserDataRewards[#self.realUserDataStates-1] -- y = 3-2x
+                    self.realUserRLTerms[userId][#self.realUserRLTerms[userId]+1] = 0
+                    -- Add this 1 user's act to RL states, bcz adp act is triggered after this user's act
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] = self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] + 1
+                    self.realUserRLTypes[userId][#self.realUserRLTypes[userId]+1] = self.CIFr.ciAdp_PresentQuiz
                 elseif act == CIFileReader.usrActInd_talkFord and
                         self.realUserDataStates[#self.realUserDataStates][CIFileReader.usrActInd_talkFord] < 1 then
                     self.realUserDataStates[#self.realUserDataStates][CIFileReader.usrStateFeatureInd_PresentQuiz] =
                         (2 - CIFileReader.AdpPresentQuizAct[userId][time])  -- act1-quiz-1.0, act2-no_quiz-0. y=2-x
+
+                    -- RL acts in real user data
+                    self.realUserRLActs[userId][#self.realUserRLActs[userId]+1] =
+                        CIFileReader.AdpPresentQuizAct[userId][time] + self.CIFr.ciAdpActRange_PresentQuiz[1] - 1
+                    -- This is used for constructing realUserRLData tables
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]+1] = self.realUserDataStates[#self.realUserDataStates]:clone()
+                    self.realUserRLRewards[userId][#self.realUserRLRewards[userId]+1] = 3 - 2*self.realUserDataRewards[#self.realUserDataStates-1] -- y = 3-2x
+                    self.realUserRLTerms[userId][#self.realUserRLTerms[userId]+1] = 0
+                    -- Add this 1 user's act to RL states, bcz adp act is triggered after this user's act
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] = self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] + 1
+                    self.realUserRLTypes[userId][#self.realUserRLTypes[userId]+1] = self.CIFr.ciAdp_PresentQuiz
                 elseif act == CIFileReader.usrActInd_submitWorksheet then
                     self.realUserDataStates[#self.realUserDataStates][CIFileReader.usrStateFeatureInd_WorksheetLevel] =
                         (CIFileReader.AdpWorksheetLevelAct[userId][time] / 3.0)  -- act1-0.33, act3-1. y=x/3
+
+                    -- RL acts in real user data
+                    self.realUserRLActs[userId][#self.realUserRLActs[userId]+1] =
+                        CIFileReader.AdpWorksheetLevelAct[userId][time] + self.CIFr.ciAdpActRange_WorksheetLevel[1] - 1
+                    -- This is used for constructing realUserRLData tables
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]+1] = self.realUserDataStates[#self.realUserDataStates]:clone()
+                    self.realUserRLRewards[userId][#self.realUserRLRewards[userId]+1] = 3 - 2*self.realUserDataRewards[#self.realUserDataStates-1] -- y = 3-2x
+                    self.realUserRLTerms[userId][#self.realUserRLTerms[userId]+1] = 0
+                    -- Add this 1 user's act to RL states, bcz adp act is triggered after this user's act
+                    self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] = self.realUserRLStates[userId][#self.realUserRLStates[userId]][act] + 1
+                    self.realUserRLTypes[userId][#self.realUserRLTypes[userId]+1] = self.CIFr.ciAdp_WorksheetLevel
                 end
 
                 -- Add 1 to corresponding state features
@@ -136,6 +231,27 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.stateFeatureStdEachFeature = torch.Tensor(self.userStateFeatureCnt):fill(1)
     -- Calculate user state feature value rescale factors
     self:_calcRealUserStateFeatureRescaleFactor()
+
+
+    for uid, uRLStates in pairs(self.realUserRLStates) do
+        self.realUserRLStatePrepInd[uid] = {}
+        for k, v in pairs(uRLStates) do
+            if self.realUserRLTerms[uid][k] == 1 then     -- if terminal
+                local ruRLStatePrep = torch.Tensor(1, 1, self.userStateFeatureCnt):fill(0)   -- this state should be 3d
+                ruRLStatePrep[1][1] = self:preprocessUserStateData(v, self.opt.prepro)   -- do preprocessing before sending back to RL
+                self.realUserRLStatePrepInd[uid][k] = torch.Tensor(1, 1, self.userStateFeatureCnt + #self.CIFr.ciAdpActRanges):fill(0)
+                self:_updateRLStatePrepTypeInd(self.realUserRLStatePrepInd[uid][k],
+                    ruRLStatePrep, self.realUserRLTypes[uid][k], true)
+            else
+                local ruRLStatePrep = torch.Tensor(1, 1, self.userStateFeatureCnt):fill(0)   -- this state should be 3d
+                ruRLStatePrep[1][1] = self:preprocessUserStateData(v, self.opt.prepro)   -- do preprocessing before sending back to RL
+                self.realUserRLStatePrepInd[uid][k] = torch.Tensor(1, 1, self.userStateFeatureCnt + #self.CIFr.ciAdpActRanges):fill(0)
+                self:_updateRLStatePrepTypeInd(self.realUserRLStatePrepInd[uid][k],
+                    ruRLStatePrep, self.realUserRLTypes[uid][k], false)
+            end
+        end
+    end
+
     collectgarbage()
 
     -- The shortest length record has a user actoin sequence length of 2. User id is 100-0466
@@ -151,6 +267,38 @@ function CIUserSimulator:_init(CIFileReader, opt)
 --    end
 --    print('$$$$$ min traj length is', minlen) os.exit()
     -- 273 students with postive nlg, 39 with 0 nlg, 90 with negative nlg. 67.9%
+
+    -- The following code show the real user data in rl format, which can be used in evaluation directly
+--    print('Testing real user rl data', TableSet.countsInSet(self.realUserRLStates),
+--        TableSet.countsInSet(self.realUserRLActs),
+--        TableSet.countsInSet(self.realUserRLRewards),
+--        TableSet.countsInSet(self.realUserRLTerms),
+--        TableSet.countsInSet(self.realUserRLTypes),
+--        TableSet.countsInSet(self.realUserRLStatePrepInd))
+--
+--
+--    local i=1
+--    for k,v in pairs(self.realUserRLStates) do
+--        print('k',k, self.realUserRLActs[k], self.realUserRLRewards[k], self.realUserRLTerms[k], self.realUserRLTypes[k])
+--        for time, sta in pairs(v) do
+--            print('state:', sta, '\n prep state:', self.realUserRLStatePrepInd[k][time])
+--        end
+--        print('#####')
+--        i = i+1
+--        if i==3 then break end
+--    end
+
+end
+
+
+function CIUserSimulator:_updateRLStatePrepTypeInd(rlStatePrepTypeInd, rlStatePrep, adpType, endingType)
+    rlStatePrepTypeInd:zero()
+    for i=1, rlStatePrep:size(3) do
+        rlStatePrepTypeInd[1][1][i] = rlStatePrep[1][1][i]
+    end
+    if not endingType then
+        rlStatePrepTypeInd[1][1][rlStatePrep:size(3) + adpType] = 1
+    end
 end
 
 --- Calculate the observed largest state feature value for each game play feature,
