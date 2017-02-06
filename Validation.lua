@@ -187,6 +187,7 @@ function Validation:ISevaluate()
         end
         weight = weight * (actDist[userSim.realUserRLActs[uid][k]] / randprob)
       else  -- terminal
+        self.agent:observe(rwd, userSim.realUserRLStatePrepInd[uid][k], true)
         weight = weight * rwd -- rwd can be -1 or 1
       end
     end
