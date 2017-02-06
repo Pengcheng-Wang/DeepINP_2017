@@ -156,6 +156,10 @@ function Master:evaluate()
   self.validation:evaluate() -- Sets env and agent to evaluation mode
 end
 
+function Master:ISevaluate()
+    self.validation:ISevaluate() -- Sets env and agent to evaluation mode
+end
+
 -- Sets up SIGINT (Ctrl+C) handler to save network before quitting
 function Master:catchSigInt()
   signal.signal(signal.SIGINT, function(signum)
