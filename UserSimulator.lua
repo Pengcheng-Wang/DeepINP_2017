@@ -334,6 +334,21 @@ end
 
 --- Right now, this preprocessing is rescaling
 function CIUserSimulator:preprocessUserStateData(obvUserData, ppType)
+
+    -- Attention: We are right now doing a training/test split. So, all preprocessUserStateData
+    -- should use training set data. So, just directly put it here for convenience. Not a good sln.
+    self.stateFeatureMeanEachFeature = torch.Tensor{
+        5.2252, 1.3964, 0.7949, 1.0003, 1.1239, 1.5931, 0.9404,
+        0.8490, 2.8132, 5.4015, 0.6394, 0.2554, 0.2510, 0.1572,
+        0.4907, 0.5385, 0.2344, 0.4313, 0.4647, 0.6142, 0.3467
+    }
+
+    self.stateFeatureStdEachFeature = torch.Tensor{
+        4.8425, 2.5111, 0.5854, 0.9263, 1.0933, 1.4194, 0.8491,
+        0.8952, 5.0249, 6.6338, 1.1148, 0.4361, 0.4336, 0.3640,
+        0.3896, 0.4155, 0.3564, 0.4953, 0.4988, 0.2322, 0.1177
+    }
+
     if ppType == 'rsc' then
         return torch.cdiv(obvUserData, self.stateFeatureRescaleFactor)
     elseif ppType == 'std' then
