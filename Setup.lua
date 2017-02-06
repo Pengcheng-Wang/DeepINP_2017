@@ -85,7 +85,7 @@ function Setup:parseOptions(arg)
   cmd:option('-zoom', 1, 'Display zoom (requires QT)')
   cmd:option('-game', '', 'Name of Atari ROM (stored in "roms" directory)')
   -- Training vs. evaluate mode
-  cmd:option('-mode', 'train', 'Train vs. test mode: train|eval')
+  cmd:option('-mode', 'train', 'Train vs. test mode: train|eval|is')
   -- State preprocessing options (for visual states)
   cmd:option('-height', 0, 'Resized screen height (0 to disable)')
   cmd:option('-width', 0, 'Resize screen width (0 to disable)')
@@ -164,6 +164,7 @@ function Setup:parseOptions(arg)
   cmd:option('-actDistT', 100, 'The temperature hyper-param used in softmax of importance sampling')
   cmd:option('-ciunet', '', 'the pretrained network for user acts/scores predictor, should not be used')
   cmd:option('-save', 'upplogs', 'subdirectory to save logs')
+  cmd:option('-ciuTType', 'train', 'tell userSimulator which part of corpus to use')
 
   local opt = cmd:parse(arg)
 

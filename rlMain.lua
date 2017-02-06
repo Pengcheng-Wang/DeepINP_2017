@@ -30,6 +30,8 @@ else
         master:train()
     elseif opt.mode == 'eval' then
         master:evaluate()
+    elseif opt.model == 'is' then
+        master:ISevaluate()
     end
 end
 
