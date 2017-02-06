@@ -191,6 +191,7 @@ function Validation:ISevaluate()
         weight = weight * rwd -- rwd can be -1 or 1
       end
     end
+    -- print('#@#@#@#', weight)
     totalScoreIs = totalScoreIs + weight
   end
 
