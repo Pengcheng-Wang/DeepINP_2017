@@ -29,6 +29,7 @@ function Model:_init(opt)
   self.hiddenSize = opt.hiddenSize  -- Default value is 512. For the Catch demo, it is 32.
   self.histLen = opt.histLen
   self.duel = opt.duel  -- bool
+  self.rlnnLinear = opt.rlnnLinear
   self.bootstraps = opt.bootstraps  -- int
   self.recurrent = opt.recurrent  -- bool
   self.env = opt.env  -- string. e.g., 'rlenvs.Catch'
@@ -110,7 +111,9 @@ function Model:create()
   -- Network head
   local head = nn.Sequential()
   local heads = math.max(self.bootstraps, 1)  -- for the Catch demo, the default bootstraps value is 0
-  if self.duel then -- In default, duel network is used
+  if self.rlnnLinear then
+    head:add(nn.Linear(bodyOutputSize, self.m))
+  elseif self.duel then -- In default, duel network is used
     -- Value approximator V^(s)
     local valStream = nn.Sequential()
     if self.recurrent and self.async then

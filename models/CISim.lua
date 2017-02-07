@@ -17,6 +17,10 @@ function Body:_init(opts)
     self.recurrent = opts.recurrent -- The default value is false
     self.histLen = opts.histLen -- The default length value is 4
     self.stateSpec = opts.stateSpec
+    self.rlnnLinear = false
+    if next(opts) ~= nil then
+        self.rlnnLinear = opts.rlnnLinear
+    end
 end
 
 function Body:createBody()
@@ -25,7 +29,11 @@ function Body:createBody()
     local net = nn.Sequential()
     net:add(nn.View(histLen*self.stateSpec[2][1]*self.stateSpec[2][2]*self.stateSpec[2][3]))    -- nn.View() performs like Reshape()
     net:add(nn.Linear(histLen*self.stateSpec[2][1]*self.stateSpec[2][2]*self.stateSpec[2][3], 64))
-    net:add(nn.ReLU(true))
+    if not self.rlnnLinear then
+        net:add(nn.ReLU(true))
+    else
+        print('Buidling up linear rl body!!!')
+    end
 
     return net
 end

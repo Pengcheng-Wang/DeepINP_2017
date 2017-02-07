@@ -95,6 +95,7 @@ function Setup:parseOptions(arg)
   cmd:option('-hiddenSize', 512, 'Number of units in the hidden fully connected layer')
   cmd:option('-histLen', 4, 'Number of consecutive states processed/used for backpropagation-through-time') -- DQN standard is 4, DRQN is 10
   cmd:option('-duel', 'true', 'Use dueling network architecture (learns advantage function)')
+  cmd:option('-rlnnLinear', 'false', 'Use linear model for rl value function approximation')
   cmd:option('-bootstraps', 10, 'Number of bootstrap heads (0 to disable)')
   --cmd:option('-bootstrapMask', 1, 'Independent probability of masking a transition for each bootstrap head ~ Ber(bootstrapMask) (1 to disable)')
   cmd:option('-recurrent', 'false', 'Use recurrent connections')
@@ -171,6 +172,7 @@ function Setup:parseOptions(arg)
   -- Process boolean options (Torch fails to accept false on the command line)
   opt.cudnn = opt.cudnn == 'true'
   opt.duel = opt.duel == 'true'
+  opt.rlnnLinear = opt.rlnnLinear == 'true'
   opt.recurrent = opt.recurrent == 'true'
   opt.discretiseMem = opt.discretiseMem == 'true'
   opt.doubleQ = opt.doubleQ == 'true'
