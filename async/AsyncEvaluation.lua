@@ -36,4 +36,8 @@ function AsyncEvaluation:evaluate()
   self.validAgent:evaluate(display)
 end
 
+function AsyncEvaluation:ISevaluate()
+  self.validAgent:ISevaluate()
+end
+
 return AsyncEvaluation
