@@ -7,6 +7,7 @@ local classic = require 'classic'
 local gnuplot = require 'gnuplot'
 require 'classic.torch'
 local TableSet = require 'MyMisc.TableSetMisc'
+local Singleton = require 'structures/Singleton'
 
 local ValidationAgent = classic.class('ValidationAgent')
 
@@ -58,7 +59,9 @@ function ValidationAgent:_init(opt, theta, atomic)
 
   self.opt = opt
   -- Sorry, adding ugly code here again, just for CI data compatability
-  self.CIActAdpBound = {{1, 3}, {4, 5}, {6, 8}, {9, 10}}
+  self.CIActAdpBound = {{1, 3}, {4, 5}, {6, 8}, {9, 10} }
+  -- Get singleton instance for step
+  self.globals = Singleton.getInstance()  -- this global singleton stores one value, the steps
 
   classic.strict(self)
 end
