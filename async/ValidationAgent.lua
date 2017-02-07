@@ -6,6 +6,7 @@ local CircularQueue = require 'structures/CircularQueue'
 local classic = require 'classic'
 local gnuplot = require 'gnuplot'
 require 'classic.torch'
+local TableSet = require 'MyMisc.TableSetMisc'
 
 local ValidationAgent = classic.class('ValidationAgent')
 
@@ -241,6 +242,11 @@ function ValidationAgent:validate()
     log.info('New best average score')
     self.bestValScore = valAvgScore
     self:saveWeights('best')
+  end
+
+  if (self.globals.step/self.progFreq) % 10 == 0 then
+    log.info('Saving weights on step' .. self.globals.step/self.progFreq)
+    self.saveWeights('Epoch_' .. self.globals.step/self.progFreq .. string.format('%.2f', valAvgScore))
   end
 
   if self.reportWeights then
@@ -481,9 +487,11 @@ function ValidationAgent:ISevaluate(display)
   local userSim = self.env.CIUSim
 
   local totalScoreIs = 0
+  local totalScoreIsDiscout = 0
   for uid, uRec in pairs(userSim.realUserRLTerms) do
     local rwd = userSim.realUserRLRewards[uid][1]
     local weight = 1.0
+    local weightDiscount = 1.0
     for k, v in pairs(uRec) do
       local observation = self.model:preprocess(userSim.realUserRLStatePrepInd[uid][k])
       if v < 1 then -- not terminal
@@ -503,13 +511,17 @@ function ValidationAgent:ISevaluate(display)
       else  -- terminal
         if self.lstm then self.lstm:forget() end
         weight = weight * rwd -- rwd can be -1 or 1
+        weightDiscount = weight * math.pow(self.opt.gamma, k-1)
       end
     end
-    -- print('#@#@#@#', weight)
+    if self.opt.isevaprt then log.info('IS policy weigthed value:' .. weight .. ', discnt: ' .. weightDiscount) end
     totalScoreIs = totalScoreIs + weight
+    totalScoreIsDiscout = totalScoreIsDiscout + weightDiscount
   end
 
-  log.info('Importance Sampling rewards on test set: ' .. totalScoreIs)
+  local trjCnt = TableSet.countsInSet(userSim.realUserRLTerms)
+  log.info('Importance Sampling rewards on test set: ' .. totalScoreIs/trjCnt .. ', total: ' .. totalScoreIs ..
+      'Discount Importance Sampling rewards on test set: '.. totalScoreIsDiscout/trjCnt .. ', total: ' .. totalScoreIsDiscout)
 
 end
 
