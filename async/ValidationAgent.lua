@@ -465,7 +465,7 @@ function ValidationAgent:evaluate(display)
     valStep = valStep + 1
   end
 
-  log.info('[VAL] Final evaluation avg score: ', valTotalScore/self.opt.evaTrajs)
+  log.info('[VAL] Final evaluation avg score: ' .. valTotalScore/self.opt.evaTrajs)
 
   if display then
     display:createVideo()
