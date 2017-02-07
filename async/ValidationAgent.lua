@@ -246,7 +246,7 @@ function ValidationAgent:validate()
 
 
   log.info('Saving weights on training step')
-  local avs = string.format('%.5f', valAvgScore) or 'nvl'
+  avs = string.format('%.5f', valAvgScore) or 'nvl'
   self.saveWeights(avs)
 
   if self.reportWeights then
