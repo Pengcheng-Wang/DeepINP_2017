@@ -13,9 +13,16 @@ function AsyncEvaluation:_init(opt)
   local policyNet = asyncModel:createNet()
   local theta = policyNet:getParameters()
 
-  local weightsFile = paths.concat('experiments', opt._id, 'last.weights.t7')
-  local weights = torch.load(weightsFile)
-  theta:copy(weights)
+  if paths.filep(opt.network) then
+    log.info('Loading pretrained network weights from ' .. opt.network)
+    local weights = torch.load(opt.network)
+    theta:copy(weights)
+  else
+    log.info('Loading pretrained network weights from last trained weights in ' .. opt._id)
+    local weightsFile = paths.concat('experiments', opt._id, 'last.weights.t7')
+    local weights = torch.load(weightsFile)
+    theta:copy(weights)
+  end
 
   local atomic = tds.AtomicCounter()
   self.validAgent = ValidationAgent(opt, theta, atomic)
