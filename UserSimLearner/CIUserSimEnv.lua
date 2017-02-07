@@ -102,15 +102,15 @@ function CIUserSimEnv:_calcUserAct()
     lpy = torch.cumsum(lpy)
     local actSampleLen = self.opt.actSmpLen
     lpy = torch.div(lpy, lpy[actSampleLen])
-    local greedySmpThres = 0.6
+    local greedySmpThres = self.opt.actSmpEps
 
-    if self.timeStepCnt == 2 then
-        greedySmpThres = 0.1
-    elseif self.timeStepCnt == 3 then
-        greedySmpThres = 0.3
-    elseif self.timeStepCnt == 4 then
-        greedySmpThres = 0.5
-    end
+--    if self.timeStepCnt == 2 then
+--        greedySmpThres = 0.1
+--    elseif self.timeStepCnt == 3 then
+--        greedySmpThres = 0.3
+--    elseif self.timeStepCnt == 4 then
+--        greedySmpThres = 0.5
+--    end
 
     self.curRnnUserAct = lps[1]  -- the action result given by the action predictor
     if torch.uniform() > greedySmpThres then
@@ -293,11 +293,35 @@ function CIUserSimEnv:step(adpAct)
         self.rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(self.rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
 
         local nll_rewards = self.userScorePred:forward(self.tabRnnStatePrep)
-        lp, rin = torch.max(nll_rewards[self.opt.lstmHist]:squeeze(), 1)
+--        lp, rin = torch.max(nll_rewards[self.opt.lstmHist]:squeeze(), 1)
+        local nll_rwd = nll_rewards[self.opt.lstmHist]:squeeze()
         --        print('Predicted reward:', rin[1], torch.exp(nll_rewards[self.opt.lstmHist]:squeeze()))
         --        print('--====== End')
+
+        --        print('Action choice likelihood Next time step:\n', torch.exp(nll_acts))
+        local lpy   -- log likelihood value
+        local lps   -- sorted index in desendent-order
+        lpy, lps = torch.sort(nll_rwd, 1, true)
+        lpy = torch.exp(lpy)
+        lpy = torch.cumsum(lpy)
+        local rwdSampleLen = 2  -- two types of rewards assumption in CI
+--        lpy = torch.div(lpy, lpy[rwdSampleLen])
+        local greedySmpThres = self.opt.rwdSmpEps
+
+        local scoreType = lps[1]  -- the action result given by the action predictor
+        if torch.uniform() > greedySmpThres then
+            -- sample according to classifier output
+            local rndRwdPick = torch.uniform()
+            for i=1, rwdSampleLen do
+                if rndRwdPick <= lpy[i] then
+                    scoreType = lps[i]
+                    break
+                end
+            end
+        end
+
         local score = 1
-        if rin[1] == 2 then score = -1 end
+        if scoreType == 2 then score = -1 end
         self:_updateRLStatePrepTypeInd(true)    -- pass true as param to indicate ending act is reached
         return score, self.rlStatePrepTypeInd, true, 0
     end
