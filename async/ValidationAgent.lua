@@ -231,8 +231,8 @@ function ValidationAgent:validate()
 
   self:visualiseFilters()
 
-  local avgV = self:validationStats()
-  log.info('Average V: ' .. avgV)
+--  local avgV = self:validationStats()
+--  log.info('Average V: ' .. avgV)
 
   -- Save latest weights
   log.info('Saving weights')
