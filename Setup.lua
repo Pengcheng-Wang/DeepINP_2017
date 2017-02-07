@@ -154,6 +154,7 @@ function Setup:parseOptions(arg)
   cmd:option('-verbose', 'false', 'Log info for every episode (only in train mode)')
   cmd:option('-saliency', '', 'Display saliency maps (requires QT): <none>|normal|guided|deconvnet')
   cmd:option('-record', 'false', 'Record screen (only in eval mode)')
+  cmd:option('-evalRand', 'false', 'Whether to evaluate random policy')
   -- CI User Simulation Model Options
   cmd:option('-prepro', 'std', 'input state feature preprocessing: rsc | std')
   cmd:option('-ubgDir', 'ubgModel', 'directory storing uap and usp models')
@@ -186,6 +187,7 @@ function Setup:parseOptions(arg)
   opt.record = opt.record == 'true'
   opt.noValidation = opt.noValidation == 'true'
   opt.isevaprt = opt.isevaprt == 'true'
+  opt.evalRand = opt.evalRand == 'true'
 
   -- Process boolean/enum options
   if opt.colorSpace == '' then opt.colorSpace = false end

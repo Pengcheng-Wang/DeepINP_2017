@@ -443,6 +443,13 @@ function ValidationAgent:evaluate(display)
 
       local action = self:selectAction(state)
 
+      if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.opt.evalRand then -- right now, rand policy can only be evaluated in async mode
+        local adpT = 0
+        if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
+        assert(adpT >=1 and adpT <= 4)
+        action = torch.random(self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2])
+      end
+
       reward, observation, terminal, adpType = self.env:step(action - self.actionOffset)
       valEpisodeScore = valEpisodeScore + reward
     else
