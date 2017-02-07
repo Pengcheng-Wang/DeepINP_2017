@@ -467,4 +467,50 @@ function ValidationAgent:evaluate(display)
 end
 
 
+function ValidationAgent:ISevaluate(display)
+  --- From Validation
+  log.info('IS Evaluation mode')
+  -- Set environment and agent to evaluation mode
+  self.theta_:copy(self.theta)
+  if self.lstm then self.lstm:forget() end
+
+  self.stateBuffer:clear()
+  self.env:evaluate()
+  self.policyNet_:evaluate()
+
+  local userSim = self.env.CIUSim
+
+  local totalScoreIs = 0
+  for uid, uRec in pairs(userSim.realUserRLTerms) do
+    local rwd = userSim.realUserRLRewards[uid][1]
+    local weight = 1.0
+    for k, v in pairs(uRec) do
+      local observation = self.model:preprocess(userSim.realUserRLStatePrepInd[uid][k])
+      if v < 1 then -- not terminal
+        self.stateBuffer:push(observation)
+      else
+        self.stateBuffer:clear()
+      end
+      if v < 1 then -- not terminal
+        local state = self.stateBuffer:readAll()
+        local _, actDist = self:selectAction(state)
+        local randprob = 0.333333
+        if userSim.realUserRLTypes[uid][k] == userSim.CIFr.ciAdp_BryceSymp or
+                userSim.realUserRLTypes[uid][k] == userSim.CIFr.ciAdp_PresentQuiz then
+          randprob = 0.5
+        end
+        weight = weight * (actDist[userSim.realUserRLActs[uid][k]] / randprob)
+      else  -- terminal
+        if self.lstm then self.lstm:forget() end
+        weight = weight * rwd -- rwd can be -1 or 1
+      end
+    end
+    -- print('#@#@#@#', weight)
+    totalScoreIs = totalScoreIs + weight
+  end
+
+  log.info('Importance Sampling rewards on test set: ' .. totalScoreIs)
+
+end
+
 return ValidationAgent
