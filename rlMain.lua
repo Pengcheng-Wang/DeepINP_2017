@@ -22,6 +22,9 @@ if opt.async then
     elseif opt.mode == 'eval' then
         local eval = AsyncEvaluation(opt)
         eval:evaluate()
+    elseif opt.mode == 'is' then
+        local eval = AsyncEvaluation(opt)
+        eval:ISevaluate()
     end
 else
     local master = Master(opt)
