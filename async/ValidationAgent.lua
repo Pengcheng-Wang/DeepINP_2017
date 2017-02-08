@@ -157,6 +157,7 @@ function ValidationAgent:probabilisticAction(state)
     -- Have to make sure subAdpActRegion does not sum up to 0 (all 0s) before sent to multinomial()
     subAdpActRegion:add(TINY_EPSILON) -- add a small number to this distribution so it will not sum up to 0
     local regAct = torch.multinomial(subAdpActRegion, 1):squeeze()
+    if self.opt.a3cgreedy then _, regAct = torch.max(subAdpActRegion, 1):squeeze() end
 --    print('Display act choice dist: ', subAdpActRegion:squeeze())
     return self.CIActAdpBound[adpT][1] + regAct - 1, actDist
   else

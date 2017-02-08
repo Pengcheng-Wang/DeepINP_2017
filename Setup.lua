@@ -135,6 +135,7 @@ function Setup:parseOptions(arg)
   cmd:option('-valSize', 500, 'Number of transitions to use for calculating validation statistics')
   cmd:option('-evaTrajs', 500, 'Number of trajectories to use for evaluation')
   cmd:option('-isevaprt', 'false', 'Whether to print importance sampling based policy value for each test trajectory')
+  cmd:option('-a3cgreedy', 'false', 'Whether A3C agent should pick greedy action in evaluation')
   -- Async options
   cmd:option('-async', '', 'Async agent: <none>|Sarsa|OneStepQ|NStepQ|A3C') -- TODO: Change names
   cmd:option('-rmsEpsilon', 0.1, 'Epsilon for sharedRmsProp')
@@ -190,6 +191,7 @@ function Setup:parseOptions(arg)
   opt.noValidation = opt.noValidation == 'true'
   opt.isevaprt = opt.isevaprt == 'true'
   opt.evalRand = opt.evalRand == 'true'
+  opt.a3cgreedy = opt.a3cgreedy == 'true'
 
   -- Process boolean/enum options
   if opt.colorSpace == '' then opt.colorSpace = false end
