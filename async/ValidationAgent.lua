@@ -157,7 +157,7 @@ function ValidationAgent:probabilisticAction(state)
     -- Have to make sure subAdpActRegion does not sum up to 0 (all 0s) before sent to multinomial()
     subAdpActRegion:add(TINY_EPSILON) -- add a small number to this distribution so it will not sum up to 0
     local regAct = torch.multinomial(subAdpActRegion, 1):squeeze()
-    if self.opt.a3cgreedy then _, regAct = torch.max(subAdpActRegion, 1):squeeze() end
+    if self.opt.a3cgreedy then _, regAct = torch.max(subAdpActRegion, 1) regAct = regAct[1] end
 --    print('Display act choice dist: ', subAdpActRegion:squeeze())
     return self.CIActAdpBound[adpT][1] + regAct - 1, actDist
   else
@@ -523,14 +523,14 @@ function ValidationAgent:ISevaluate(display)
         weightDiscount = weight * math.pow(self.opt.gamma, k-1)
       end
     end
-    if self.opt.isevaprt then log.info('IS policy weigthed value:' .. weight .. ', discnt: ' .. weightDiscount) end
+    if self.opt.isevaprt then log.info('IS policy weigthed value,' .. weight .. ', discnt, ' .. weightDiscount) end
     totalScoreIs = totalScoreIs + weight
     totalScoreIsDiscout = totalScoreIsDiscout + weightDiscount
   end
 
   local trjCnt = TableSet.countsInSet(userSim.realUserRLTerms)
-  log.info('Importance Sampling rewards on test set: ' .. totalScoreIs/trjCnt .. ', total: ' .. totalScoreIs ..
-      'Discount Importance Sampling rewards on test set: '.. totalScoreIsDiscout/trjCnt .. ', total: ' .. totalScoreIsDiscout)
+  log.info('Importance Sampling rewards on test set,' .. totalScoreIs/trjCnt .. ', total, ' .. totalScoreIs ..
+      'Discount Importance Sampling rewards on test set, '.. totalScoreIsDiscout/trjCnt .. ', total, ' .. totalScoreIsDiscout)
 
 end
 
