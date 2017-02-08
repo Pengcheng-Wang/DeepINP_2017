@@ -61,7 +61,7 @@ elseif opt.trType == 'bg' then
     local scoreStat = {0, 0}
     local totalTrajLength = 0
     local totalLengthEachType = {0, 0}
-    local rnds = 10000
+    local rnds = 1000
     for i=1, rnds do
         local sc, tl
         sc, tl = CIUserBehaviorGen:sampleOneTraj()

@@ -124,6 +124,12 @@ function CIUserSimEnv:_calcUserAct()
         end
     end
 
+--    if self.timeStepCnt >= self.opt.termActSmgLen then
+--        if torch.uniform() < self.opt.termActSmgEps then
+--            self.curRnnUserAct = self.CIUSim.CIFr.usrActInd_end
+--        end
+--    end
+
     return self.curRnnUserAct
 end
 
