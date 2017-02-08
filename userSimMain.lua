@@ -61,30 +61,51 @@ elseif opt.trType == 'bg' then
     local scoreStat = {0, 0}
     local totalTrajLength = 0
     local totalLengthEachType = {0, 0}
-    for i=1, 402 do
+    local rnds = 10000
+    for i=1, rnds do
         local sc, tl
         sc, tl = CIUserBehaviorGen:sampleOneTraj()
         scoreStat[sc] = scoreStat[sc] + 1
         totalTrajLength = totalTrajLength + tl
         totalLengthEachType[sc] = totalLengthEachType[sc] + tl
     end
-    print('Score dist:', scoreStat, 'Avg length:', totalTrajLength/402, 'Avg length of each nlg type 1:', totalLengthEachType[1]/scoreStat[1],
+    print('Score dist:', scoreStat, 'Avg length:', totalTrajLength/rnds, 'Avg length of each nlg type 1:', totalLengthEachType[1]/scoreStat[1],
         'Avg length of each nlg type 2:', totalLengthEachType[2]/scoreStat[2])
+    local numTrans = 0
+    for uid, urec in pairs(CIUserModel.realUserRLActs) do
+        numTrans = numTrans + #urec - 1
+    end
+    print('Number of transitions in data set is', numTrans)
 elseif opt.trType == 'rl' then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     local CIUserBehaviorGen = CIUserBehaviorGenerator(CIUserModel, CIUserActsPred, CIUserScorePred, opt)
 
-    local obv, score, term, adpType
-    term = false
-    obv, adpType = CIUserBehaviorGen:start()
-    print('^### Outside in main\n state:', obv, '\n type:', adpType)
-    while not term do
-        local rndAdpAct = torch.random(fr.ciAdpActRanges[adpType][1], fr.ciAdpActRanges[adpType][2])
-        print('^--- Adaptation type', adpType, 'Random act choice: ', rndAdpAct)
-        score, obv, term, adpType = CIUserBehaviorGen:step(rndAdpAct)
-        print('^### Outside in main\n state:', obv, '\n type:', adpType, '\n score:', score, ',term:', term)
+    local numTrans = 0
+    for uid, urec in pairs(CIUserModel.realUserRLActs) do
+        numTrans = numTrans + #urec - 1
     end
+    print('Number of transitions in data set is', numTrans)
+
+    local gens = 1000
+    local adpTotLen = 0
+    for i=1, gens do
+        print(i)
+        local obv, score, term, adpType
+        local adpCnt = 0
+        term = false
+        obv, adpType = CIUserBehaviorGen:start()
+        print('^### Outside in main\n state:', obv, '\n type:', adpType)
+        while not term do
+            local rndAdpAct = torch.random(fr.ciAdpActRanges[adpType][1], fr.ciAdpActRanges[adpType][2])
+            print('^--- Adaptation type', adpType, 'Random act choice: ', rndAdpAct)
+            score, obv, term, adpType = CIUserBehaviorGen:step(rndAdpAct)
+            adpCnt = adpCnt + 1
+            print('^### Outside in main\n state:', obv, '\n type:', adpType, '\n score:', score, ',term:', term)
+        end
+        adpTotLen = adpTotLen + adpCnt
+    end
+    print('In user behaviro generation in', gens, 'times, avg len:', adpTotLen/gens)
 elseif opt.trType == 'ev' then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
