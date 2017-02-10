@@ -496,6 +496,7 @@ function ValidationAgent:ISevaluate(display)
   local userSim = self.env.CIUSim
 
   local totalScoreIs = 0
+  local sumOfProbWeights = 0
   local totalScoreIsDiscout = 0
   for uid, uRec in pairs(userSim.realUserRLTerms) do
     local rwd = userSim.realUserRLRewards[uid][1]
@@ -519,6 +520,7 @@ function ValidationAgent:ISevaluate(display)
         weight = weight * (actDist[userSim.realUserRLActs[uid][k]] / randprob)
       else  -- terminal
         if self.lstm then self.lstm:forget() end
+        sumOfProbWeights = sumOfProbWeights + weight  -- This is the sum of all trajectory appearance probabilities (no negative values)
         weight = weight * rwd -- rwd can be -1 or 1
         weightDiscount = weight * math.pow(self.opt.gamma, k-1)
       end
@@ -529,8 +531,8 @@ function ValidationAgent:ISevaluate(display)
   end
 
   local trjCnt = TableSet.countsInSet(userSim.realUserRLTerms)
-  log.info('Importance Sampling rewards on test set,' .. totalScoreIs/trjCnt .. ', total, ' .. totalScoreIs ..
-      'Discount Importance Sampling rewards on test set, '.. totalScoreIsDiscout/trjCnt .. ', total, ' .. totalScoreIsDiscout)
+  log.info('Importance Sampling rewards on test set,' .. totalScoreIs/sumOfProbWeights .. ', total, ' .. totalScoreIs ..
+      'Discount Importance Sampling rewards on test set, '.. totalScoreIsDiscout/sumOfProbWeights .. ', total, ' .. totalScoreIsDiscout)
 
 end
 

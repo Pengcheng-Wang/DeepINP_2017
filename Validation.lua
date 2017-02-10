@@ -181,6 +181,7 @@ function Validation:ISevaluate()
   local userSim = self.env.CIUSim
 
   local totalScoreIs = 0
+  local sumOfProbWeights = 0
   local totalScoreIsDiscout = 0
   for uid, uRec in pairs(userSim.realUserRLTerms) do
     local rwd = userSim.realUserRLRewards[uid][1]
@@ -188,7 +189,7 @@ function Validation:ISevaluate()
     local weightDiscount = 1.0
     for k, v in pairs(uRec) do
       if v < 1 then -- not terminal
-        local action, actDist = self.agent:observe(0, userSim.realUserRLStatePrepInd[uid][k], false)
+        local _, actDist = self.agent:observe(0, userSim.realUserRLStatePrepInd[uid][k], false)
         local randprob = 0.333333
         if userSim.realUserRLTypes[uid][k] == userSim.CIFr.ciAdp_BryceSymp or
                 userSim.realUserRLTypes[uid][k] == userSim.CIFr.ciAdp_PresentQuiz then
@@ -197,6 +198,7 @@ function Validation:ISevaluate()
         weight = weight * (actDist[userSim.realUserRLActs[uid][k]] / randprob)
       else  -- terminal
         self.agent:observe(rwd, userSim.realUserRLStatePrepInd[uid][k], true) -- this is necessary is lstm is used, bcz forget() will be called in observe()
+        sumOfProbWeights = sumOfProbWeights + weight  -- This is the sum of all trajectory appearance probabilities (no negative values)
         weight = weight * rwd -- rwd can be -1 or 1
         weightDiscount = weight * math.pow(self.opt.gamma, k-1)
       end
@@ -207,8 +209,8 @@ function Validation:ISevaluate()
   end
 
   local trjCnt = TableSet.countsInSet(userSim.realUserRLTerms)
-  log.info('Importance Sampling rewards on test set: ' .. totalScoreIs/trjCnt .. ', total: ' .. totalScoreIs ..
-          'Discount Importance Sampling rewards on test set: '.. totalScoreIsDiscout/trjCnt .. ', total: ' .. totalScoreIsDiscout)
+  log.info('Importance Sampling rewards on test set: ' .. totalScoreIs/sumOfProbWeights .. ', total: ' .. totalScoreIs ..
+          'Discount Importance Sampling rewards on test set: '.. totalScoreIsDiscout/sumOfProbWeights .. ', total: ' .. totalScoreIsDiscout)
 
 end
 
