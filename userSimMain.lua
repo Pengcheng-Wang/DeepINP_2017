@@ -82,10 +82,16 @@ elseif opt.trType == 'rl' then
     local CIUserBehaviorGen = CIUserBehaviorGenerator(CIUserModel, CIUserActsPred, CIUserScorePred, opt)
 
     local numTrans = 0
+    local numTransType = {0, 0, 0, 0}
     for uid, urec in pairs(CIUserModel.realUserRLActs) do
         numTrans = numTrans + #urec - 1
+        for k,v in pairs(CIUserModel.realUserRLTypes[uid]) do
+            if v ~= 0 then
+                numTransType[v] = numTransType[v] + 1
+            end
+        end
     end
-    print('Number of transitions in data set is', numTrans)
+    print('Number of transitions in data set is', numTrans, 'type: ', numTransType)
 
     local gens = 10000
     local adpTotLen = 0
