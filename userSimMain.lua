@@ -61,7 +61,7 @@ elseif opt.trType == 'bg' then
     local scoreStat = {0, 0}
     local totalTrajLength = 0
     local totalLengthEachType = {0, 0}
-    local rnds = 1000
+    local rnds = 10000
     for i=1, rnds do
         local sc, tl
         sc, tl = CIUserBehaviorGen:sampleOneTraj()
@@ -87,25 +87,27 @@ elseif opt.trType == 'rl' then
     end
     print('Number of transitions in data set is', numTrans)
 
-    local gens = 1000
+    local gens = 10000
     local adpTotLen = 0
+    local adpLenType = {0, 0, 0, 0}
     for i=1, gens do
-        print(i)
+        print('iter', i)
         local obv, score, term, adpType
         local adpCnt = 0
         term = false
         obv, adpType = CIUserBehaviorGen:start()
         print('^### Outside in main\n state:', obv, '\n type:', adpType)
         while not term do
-            local rndAdpAct = torch.random(fr.ciAdpActRanges[adpType][1], fr.ciAdpActRanges[adpType][2])
-            print('^--- Adaptation type', adpType, 'Random act choice: ', rndAdpAct)
-            score, obv, term, adpType = CIUserBehaviorGen:step(rndAdpAct)
+            adpLenType[adpType] = adpLenType[adpType] + 1
             adpCnt = adpCnt + 1
-            print('^### Outside in main\n state:', obv, '\n type:', adpType, '\n score:', score, ',term:', term)
+            local rndAdpAct = torch.random(fr.ciAdpActRanges[adpType][1], fr.ciAdpActRanges[adpType][2])
+--            print('^--- Adaptation type', adpType, 'Random act choice: ', rndAdpAct)
+            score, obv, term, adpType = CIUserBehaviorGen:step(rndAdpAct)
+--            print('^### Outside in main\n state:', obv, '\n type:', adpType, '\n score:', score, ',term:', term)
         end
         adpTotLen = adpTotLen + adpCnt
     end
-    print('In user behaviro generation in', gens, 'times, avg len:', adpTotLen/gens)
+    print('In user behaviro generation in', gens, 'times, avg len:', adpTotLen/gens, 'Adp types:', adpLenType)
 elseif opt.trType == 'ev' then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
