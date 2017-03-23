@@ -156,6 +156,7 @@ function Setup:parseOptions(arg)
   cmd:option('-saliency', '', 'Display saliency maps (requires QT): <none>|normal|guided|deconvnet')
   cmd:option('-record', 'false', 'Record screen (only in eval mode)')
   cmd:option('-evalRand', 'false', 'Whether to evaluate random policy')
+  cmd:option('-trainWithRawData', 'false', 'Whether to use raw data in training, instead of using simulated player model')
   -- CI User Simulation Model Options
   cmd:option('-prepro', 'std', 'input state feature preprocessing: rsc | std')
   cmd:option('-ubgDir', 'ubgModel', 'directory storing uap and usp models')
@@ -191,6 +192,7 @@ function Setup:parseOptions(arg)
   opt.noValidation = opt.noValidation == 'true'
   opt.isevaprt = opt.isevaprt == 'true'
   opt.evalRand = opt.evalRand == 'true'
+  opt.trainWithRawData = opt.trainWithRawData == 'true'
   opt.a3cgreedy = opt.a3cgreedy == 'true'
 
   -- Process boolean/enum options

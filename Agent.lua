@@ -14,9 +14,10 @@ require 'modules/rmspropm' -- Add RMSProp with momentum
 local qt = pcall(require, 'qt')
 
 local Agent = classic.class('Agent', AbstractAgent)
+local TableSet = require 'MyMisc.TableSetMisc'
 
 -- Creates a DQN agent
-function Agent:_init(opt)
+function Agent:_init(opt, envObj)
   -- Experiment ID
   self._id = opt._id
   self.experiments = opt.experiments
@@ -103,7 +104,31 @@ function Agent:_init(opt)
   self.globals = Singleton.getInstance()  -- this global singleton stores one value, the steps
   self.opt = opt
   -- Sorry, adding ugly code here again, just for CI data compatability
-  self.CIActAdpBound = {{1, 3}, {4, 5}, {6, 8}, {9, 10}}
+  self.CIActAdpBound = {{1, 3}, {4, 5}, {6, 8}, {9, 10} }
+  self.envRef = envObj -- This is a ref to the environment object. I used it to directly get access to raw human user data in RL agent training. Added on Mar 22, 2017
+
+  -- The following variables are used in reconstructing rl states/acts/rewards/terminals in raw training set.
+  -- The reason that these variables need to be reconstructed is that original variables in UserSimulator have
+  -- non-numerical keys in tables, so not easy to iterate when sent to store in replay memory
+  self.ruRLStates = {}
+  self.ruRLActs = {}
+  self.ruRLRewards = {}
+  self.ruRLTerms = {}
+  for kk, vv in pairs(self.envRef.CIUSim.realUserRLStatePrepInd) do
+    for ik, iv in ipairs(vv) do
+      self.ruRLStates[#self.ruRLStates+1] = iv:clone()
+      if self.envRef.CIUSim.realUserRLTerms[kk][ik] > 0 then
+        self.ruRLTerms[#self.ruRLStates] = true
+      else
+        self.ruRLTerms[#self.ruRLStates] = false
+      end
+      self.ruRLActs[#self.ruRLStates] = self.envRef.CIUSim.realUserRLActs[kk][ik]
+      self.ruRLRewards[#self.ruRLStates] = self.envRef.CIUSim.realUserRLRewards[kk][ik]
+      if not self.ruRLTerms[#self.ruRLTerms] then self.ruRLRewards[#self.ruRLRewards] = 0 end -- if not terminal, set reward to 0
+    end
+  end
+  self.ruRLItemCnt = #self.ruRLStates
+
 end
 
 -- Sets training mode
@@ -311,8 +336,21 @@ function Agent:observe(reward, rawObservation, terminal)
     end
   end
 
+  local orig_terminal = terminal  -- This is only used for setting forget() for recurrent net at the bottom of this block
+  local orig_act = aIndex
+
   -- If training
   if self.isTraining then
+    -- if train with raw data from log files
+    if self.opt.trainWithRawData then   -- The change here is that, feed raw player data into experience replay memory
+      print("Hello Setting Start")
+      local iter_raw = self.globals.step % self.ruRLItemCnt + 1
+      reward = self.ruRLRewards[iter_raw]
+      observation = self.ruRLStates[iter_raw]   -- The preprocessing is not necessary for CI, since its input is not image
+      terminal = self.ruRLTerms[iter_raw]
+      aIndex = self.ruRLActs[iter_raw]
+    end
+
     -- Store experience tuple parts (including pre-emptive action)
     self.memory:store(reward, observation, terminal, aIndex) -- TODO: Sample independent Bernoulli(p) bootstrap masks for all heads; p = 1 means no masks needed
 
@@ -347,7 +385,7 @@ function Agent:observe(reward, rawObservation, terminal)
     end
   end
 
-  if terminal then
+  if orig_terminal then -- terminal then
     if self.bootstraps > 0 then
       -- Change bootstrap head for next episode
       self.head = torch.random(self.bootstraps)
@@ -359,7 +397,7 @@ function Agent:observe(reward, rawObservation, terminal)
   end
 
   -- Return action index with offset applied
-  return aIndex - self.actionOffset, actDist
+  return orig_act - self.actionOffset, actDist
 end
 
 -- Learns from experience

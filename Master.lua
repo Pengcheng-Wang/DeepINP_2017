@@ -29,7 +29,7 @@ function Master:_init(opt)
 
   -- Create DQN agent
   log.info('Creating DQN')
-  self.agent = Agent(opt)
+  self.agent = Agent(opt, self.env) -- Here, I made the modification to use self.env as a parameter just for the usage of applying raw data directly in training. on Mar 22, 2017
   if paths.filep(opt.network) then
     -- Load saved agent if specified
     log.info('Loading pretrained network weights')
