@@ -343,7 +343,6 @@ function Agent:observe(reward, rawObservation, terminal)
   if self.isTraining then
     -- if train with raw data from log files
     if self.opt.trainWithRawData then   -- The change here is that, feed raw player data into experience replay memory
-      print("Hello Setting Start")
       local iter_raw = self.globals.step % self.ruRLItemCnt + 1
       reward = self.ruRLRewards[iter_raw]
       observation = self.ruRLStates[iter_raw]   -- The preprocessing is not necessary for CI, since its input is not image
