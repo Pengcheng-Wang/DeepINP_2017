@@ -67,6 +67,9 @@ function Master:_init(opt)
   -- Set up validation (with display if available)
   self.validation = Validation(opt, self.agent, self.env, self.display)
 
+  -- Print out number of trainable parameters in NN
+  print("Number of trainable params in QN: ", self.agent.theta:nElement())
+
   classic.strict(self)
 end
 

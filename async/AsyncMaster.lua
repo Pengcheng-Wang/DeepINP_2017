@@ -103,6 +103,9 @@ function AsyncMaster:_init(opt)
     self.theta:copy(weights)
   end
 
+  -- Print out number of trainable parameters in NN
+  print("Number of trainable params in QN: ", self.theta:nElement())
+
   self.atomic = tds.AtomicCounter()
 
   local targetNet = policyNet:clone()
