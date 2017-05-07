@@ -100,7 +100,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             -- lstm
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
-            local lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.lstmHist) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+            local lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.lstmBackProp) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
             lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
             lstm:remember('both')
             self.model:add(lstm)
@@ -133,10 +133,11 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     -- loss function: negative log-likelihood
     --
     self.uspCriterion = nn.ClassNLLCriterion()
---    if opt.uppModel == 'lstm' then
---        self.uspCriterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
---    end
+    if opt.uppModel == 'lstm' then
+        self.uspCriterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
+    end
     -- I'm trying to use the last output from lstm as source for backprop, so use ClassNLLCriterion for lstm
+    -- NOTE: I changed it on May 6, 2017. I guess it should be the same for score(outcome) and action prediction
 
     self.trainEpoch = 1
     -- this matrix records the current confusion across classes

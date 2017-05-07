@@ -142,7 +142,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             -- lstm
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
-            local lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.lstmHist) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+            local lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.lstmBackProp) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
             lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
             lstm:remember('both')
             self.model:add(lstm)
@@ -186,18 +186,22 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
     ----------------------------------------------------------------------
     -- loss function: negative log-likelihood
     --
-    self.uapCriterion = nn.ClassNLLCriterion()
+    self.uaspPrlCriterion = nn.ParallelCriterion()
+    self.uaspPrlCriterion.add(nn.ClassNLLCriterion())   -- action prediction loss function
+    self.uaspPrlCriterion.add(nn.ClassNLLCriterion())   -- score (outcome) prediction loss function
+--    self.uapCriterion = nn.ClassNLLCriterion()
+--    self.uspCriterion = nn.ClassNLLCriterion()
     if opt.uppModel == 'lstm' then
-        self.uapCriterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
+        self.uaspPrlCriterion = nn.SequencerCriterion(self.uaspPrlCriterion)
     end
 
     self.trainEpoch = 1
-    -- this matrix records the current confusion across classesActs
+    -- these matrices records the current confusion across classesActs and classesScores
     self.uapConfusion = optim.ConfusionMatrix(classesActs)
+    self.uspConfusion = optim.ConfusionMatrix(classesScores)
 
     -- log results to files
-    self.uapTrainLogger = optim.Logger(paths.concat(opt.save, 'train.log'))
-    self.uapTestLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
+    self.uaspTrainLogger = optim.Logger(paths.concat(opt.save, 'uaspTrain.log'))
 
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
@@ -214,6 +218,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             --- set up cuda nn
             self.model = self.model:cuda()
             self.uapCriterion = self.uapCriterion:cuda()
+            self.uspConfusion = self.uspConfusion:cuda()
         else
             print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
             print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
@@ -227,6 +232,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
     ---
     self.rnnRealUserDataStates = {}
     self.rnnRealUserDataActs = {}
+    self.rnnRealUserDataRewards = {}
     self.rnnRealUserDataStarts = {}
     self.rnnRealUserDataEnds = {}
     self.rnnRealUserDataPad = torch.Tensor(#self.ciUserSimulator.realUserDataStartLines):fill(0)    -- indicating whether data has padding at head (should be padded)
@@ -239,13 +245,16 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 for padi = opt.lstmHist-1, 1, -1 do
                     self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
                     self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
+                    self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
                     for i=1, padi do
                         self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = torch.Tensor(self.ciUserSimulator.userStateFeatureCnt):fill(0)
                         self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.ciUserSimulator.realUserDataActs[indSeqHead]  -- duplicate the 1st user action for padded states
+                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.ciUserSimulator.realUserDataRewards[indSeqHead]
                     end
                     for i=1, opt.lstmHist-padi do
                         self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i+padi] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
                         self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i+padi] = self.ciUserSimulator.realUserDataActs[indSeqHead+i-1]
+                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i+padi] = self.ciUserSimulator.realUserDataRewards[indSeqHead+i-1]
                     end
                     if padi == opt.lstmHist-1 then
                         self.rnnRealUserDataStarts[#self.rnnRealUserDataStarts+1] = #self.rnnRealUserDataStates     -- This is the start of a user's record
@@ -260,9 +269,11 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 if indSeqTail <= self.ciUserSimulator.realUserDataEndLines[indUserSeq] then
                     self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
                     self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
+                    self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
                     for i=1, opt.lstmHist do
                         self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
                         self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.ciUserSimulator.realUserDataActs[indSeqHead+i-1]
+                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.ciUserSimulator.realUserDataRewards[indSeqHead+i-1]
                     end
                     indSeqHead = indSeqHead + 1
                     indSeqTail = indSeqTail + 1
@@ -280,7 +291,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
 
     -- retrieve parameters and gradients
     -- have to put these lines here below the gpu setting
-    self.uapParam, self.uapDParam = self.model:getParameters()
+    self.uaspParam, self.uaspDParam = self.model:getParameters()
 end
 
 
@@ -391,12 +402,12 @@ function CIUserActScorePredictor:trainOneEpoch()
             collectgarbage()
 
             -- get new parameters
-            if x ~= self.uapParam then
-                self.uapParam:copy(x)
+            if x ~= self.uaspParam then
+                self.uaspParam:copy(x)
             end
 
             -- reset gradients
-            self.uapDParam:zero()
+            self.uaspDParam:zero()
 
             -- evaluate function for complete mini batch
             local outputs = self.model:forward(inputs)
@@ -412,11 +423,11 @@ function CIUserActScorePredictor:trainOneEpoch()
                 local norm,sign= torch.norm,torch.sign
 
                 -- Loss:
-                f = f + self.opt.coefL1 * norm(self.uapParam,1)
-                f = f + self.opt.coefL2 * norm(self.uapParam,2)^2/2
+                f = f + self.opt.coefL1 * norm(self.uaspParam,1)
+                f = f + self.opt.coefL2 * norm(self.uaspParam,2)^2/2
 
                 -- Gradients:
-                self.uapDParam:add( sign(self.uapParam):mul(self.opt.coefL1) + self.uapParam:clone():mul(self.opt.coefL2) )
+                self.uaspDParam:add( sign(self.uaspParam):mul(self.opt.coefL1) + self.uaspParam:clone():mul(self.opt.coefL2) )
             end
 
             -- update self.uapConfusion
@@ -433,7 +444,7 @@ function CIUserActScorePredictor:trainOneEpoch()
             end
 
             -- return f and df/dX
-            return f, self.uapDParam
+            return f, self.uaspDParam
         end
 
         self.model:training()
@@ -449,7 +460,7 @@ function CIUserActScorePredictor:trainOneEpoch()
                 maxIter = self.opt.maxIter,
                 lineSearch = optim.lswolfe
             }
-            optim.lbfgs(feval, self.uapParam, lbfgsState)
+            optim.lbfgs(feval, self.uaspParam, lbfgsState)
 
             -- disp report:
             print('LBFGS step')
@@ -465,7 +476,7 @@ function CIUserActScorePredictor:trainOneEpoch()
                 momentum = self.opt.momentum,
                 learningRateDecay = 5e-7
             }
-            optim.sgd(feval, self.uapParam, sgdState)
+            optim.sgd(feval, self.uaspParam, sgdState)
 
             -- disp progress
             if self.opt.uppModel ~= 'lstm' then
@@ -482,7 +493,7 @@ function CIUserActScorePredictor:trainOneEpoch()
                 learningRate = self.opt.learningRate,
                 learningRateDecay = 5e-7
             }
-            optim.adam(feval, self.uapParam, adamState)
+            optim.adam(feval, self.uaspParam, adamState)
 
             -- disp progress
             if self.opt.uppModel ~= 'lstm' then
@@ -497,7 +508,7 @@ function CIUserActScorePredictor:trainOneEpoch()
             rmspropState = rmspropState or {
                 learningRate = self.opt.learningRate
             }
-            optim.rmsprop(feval, self.uapParam, rmspropState)
+            optim.rmsprop(feval, self.uaspParam, rmspropState)
 
             -- disp progress
             if self.opt.uppModel ~= 'lstm' then
@@ -523,7 +534,7 @@ function CIUserActScorePredictor:trainOneEpoch()
             'average rowUcol correct (VOC measure): ' .. (self.uapConfusion.averageUnionValid*100) .. '% \n' ..
             ' + global correct: ' .. (self.uapConfusion.totalValid*100) .. '%'
     print(confMtxStr)
-    self.uapTrainLogger:add{['% mean class accuracy (train set)'] = self.uapConfusion.totalValid * 100}
+    self.uaspTrainLogger:add{['% mean class accuracy (train set)'] = self.uapConfusion.totalValid * 100}
 
 
     -- save/log current net

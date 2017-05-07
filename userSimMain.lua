@@ -23,7 +23,8 @@ opt = lapp[[
        -g,--gpu        (default 0)          gpu device id, 0 for using cpu
        --prepro           (default "std")       input state feature preprocessing: rsc | std
        --lstmHd           (default 192)          lstm hidden layer size
-       --lstmHist         (default 6)           lstm hist length
+       --lstmHist         (default 6)           lstm hist length. This influence the rnn tensor table construction in data preparation
+       --lstmBackProp         (default 3)           The maximum step applied in btpp in lstm
        --ubgDir           (default "ubgModel")  directory storing uap and usp models
        --uapFile          (default "uap.t7")          file storing userActsPredictor model
        --uspFile          (default "usp.t7")          file storing userScorePredictor model
