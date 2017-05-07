@@ -187,10 +187,10 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
     -- loss function: negative log-likelihood
     --
     self.uaspPrlCriterion = nn.ParallelCriterion()
-    self.uaspPrlCriterion.add(nn.ClassNLLCriterion())   -- action prediction loss function
-    self.uaspPrlCriterion.add(nn.ClassNLLCriterion())   -- score (outcome) prediction loss function
---    self.uapCriterion = nn.ClassNLLCriterion()
---    self.uspCriterion = nn.ClassNLLCriterion()
+    self.uapCriterion = nn.ClassNLLCriterion()
+    self.uspCriterion = nn.ClassNLLCriterion()
+    self.uaspPrlCriterion.add(self.uapCriterion)   -- action prediction loss function
+    self.uaspPrlCriterion.add(self.uspCriterion)   -- score (outcome) prediction loss function
     if opt.uppModel == 'lstm' then
         self.uaspPrlCriterion = nn.SequencerCriterion(self.uaspPrlCriterion)
     end
@@ -218,7 +218,10 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             --- set up cuda nn
             self.model = self.model:cuda()
             self.uapCriterion = self.uapCriterion:cuda()
-            self.uspConfusion = self.uspConfusion:cuda()
+            self.uspCriterion = self.uspCriterion:cuda()
+            self.uaspPrlCriterion = self.uaspPrlCriterion:cuda()
+            self.uaspPrlCriterion.add(self.uapCriterion)   -- action prediction loss function
+            self.uaspPrlCriterion.add(self.uspCriterion)   -- score (outcome) prediction loss function
         else
             print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
             print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
@@ -431,10 +434,18 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             -- evaluate function for complete mini batch
             local outputs = self.model:forward(inputs)
-            local f = self.uapCriterion:forward(outputs, targets)
 
-            -- estimate df/dW
-            local df_do = self.uapCriterion:backward(outputs, targets)
+            if self.opt.uppModel == 'lstm' then
+                for step=1, self.opt.lstmHist-1 do
+                    outputs[2][step] = targetsActScore[2][step]:clone() -- This means we only leave the last time step score prediction result as error source
+                    if self.opt.gpu > 0 then
+                        outputs[2][step] = outputs[2][step]:cuda()
+                    end
+                end
+            end
+
+            local f = self.uaspPrlCriterion:forward(outputs, targetsActScore)
+            local df_do = self.uaspPrlCriterion:backward(outputs, targetsActScore)
             self.model:backward(inputs, df_do)
 
             -- penalties (L1 and L2):
@@ -454,12 +465,16 @@ function CIUserActScorePredictor:trainOneEpoch()
             if self.opt.uppModel == 'lstm' then
                 for j = 1, self.opt.lstmHist do
                     for i = 1,self.opt.batchSize do
-                        self.uapConfusion:add(outputs[j][i], targets[j][i])
+                        self.uapConfusion:add(outputs[1][j][i], targetsActScore[1][j][i])
                     end
+                end
+                for i = 1,self.opt.batchSize do
+                    self.uspConfusion:add(outputs[2][self.opt.lstmHist][i], targetsActScore[2][self.opt.lstmHist][i])
                 end
             else
                 for i = 1,self.opt.batchSize do
-                    self.uapConfusion:add(outputs[i], targets[i])
+                    self.uapConfusion:add(outputs[1][i], targetsActScore[1][i])
+                    self.uspConfusion:add(outputs[2][i], targetsActScore[2][i])
                 end
             end
 
@@ -547,18 +562,24 @@ function CIUserActScorePredictor:trainOneEpoch()
     --    time = time / #self.ciUserSimulator.realUserDataStates
     print("<trainer> time to learn 1 epoch = " .. (time*1000) .. 'ms')
 
-    -- print self.uapConfusion matrix
-    --    print(self.uapConfusion)
+
     self.uapConfusion:updateValids()
-    local confMtxStr = 'average row correct: ' .. (self.uapConfusion.averageValid*100) .. '% \n' ..
+    local confMtxStr = 'Act prediction: average row correct: ' .. (self.uapConfusion.averageValid*100) .. '% \n' ..
             'average rowUcol correct (VOC measure): ' .. (self.uapConfusion.averageUnionValid*100) .. '% \n' ..
             ' + global correct: ' .. (self.uapConfusion.totalValid*100) .. '%'
     print(confMtxStr)
-    self.uaspTrainLogger:add{['% mean class accuracy (train set)'] = self.uapConfusion.totalValid * 100}
+    self.uaspTrainLogger:add{['% Act Prediction: mean class accuracy (train set)'] = self.uapConfusion.totalValid * 100 }
+
+    self.uspConfusion:updateValids()
+    confMtxStr = 'Score prediction: average row correct: ' .. (self.uspConfusion.averageValid*100) .. '% \n' ..
+            'average rowUcol correct (VOC measure): ' .. (self.uspConfusion.averageUnionValid*100) .. '% \n' ..
+            ' + global correct: ' .. (self.uspConfusion.totalValid*100) .. '%'
+    print(confMtxStr)
+    self.uaspTrainLogger:add{['% Score Prediction: mean class accuracy (train set)'] = self.uspConfusion.totalValid * 100}
 
 
     -- save/log current net
-    local filename = paths.concat(self.opt.save, 'uap.t7')
+    local filename = paths.concat(self.opt.save, 'uasp.t7')
     os.execute('mkdir -p ' .. sys.dirname(filename))
     --    if paths.filep(filename) then
     --        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
@@ -567,13 +588,15 @@ function CIUserActScorePredictor:trainOneEpoch()
     torch.save(filename, self.model)
 
     if self.trainEpoch % 20 == 0 then
-        filename = paths.concat(self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uapConfusion.totalValid*100)..'uap.t7')
+        filename = paths.concat(self.opt.save, string.format('%d', self.trainEpoch)..'_'..'_'..
+                string.format('%.2f', self.uapConfusion.totalValid*100)..string.format('%.2f', self.uspConfusion.totalValid*100)..'uasp.t7')
         os.execute('mkdir -p ' .. sys.dirname(filename))
         print('<trainer> saving periodly trained ciunet to '..filename)
         torch.save(filename, self.model)
     end
 
     self.uapConfusion:zero()
+    self.uspConfusion:zero()
     -- next epoch
     self.trainEpoch = self.trainEpoch + 1
 end
