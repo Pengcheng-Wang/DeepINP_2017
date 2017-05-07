@@ -347,25 +347,14 @@ function CIUserScorePredictor:trainOneEpoch()
 
             -- evaluate function for complete mini batch
             local outputs = self.model:forward(inputs)
-            local f
-            local df_do
-            local df_do_finalStep
-            local gradOutputsZeroed = {}
+            local f = self.uspCriterion:forward(outputs, targets)
+            local df_do = self.uspCriterion:backward(outputs, targets)
 
             if self.opt.uppModel == 'lstm' then
                 f = self.uspCriterion:forward(outputs[self.opt.lstmHist], targets[self.opt.lstmHist])
-                df_do_finalStep = self.uspCriterion:backward(outputs[self.opt.lstmHist], targets[self.opt.lstmHist])
-                for step=1, self.opt.lstmHist do
-                    gradOutputsZeroed[step] = torch.zeros(self.opt.batchSize, #self.classes)
-                    if self.opt.gpu > 0 then
-                        gradOutputsZeroed[step] = gradOutputsZeroed[step]:cuda()
-                    end
+                for step=1, self.opt.lstmHist-1 do
+                    df_do[step]:zero()
                 end
-                gradOutputsZeroed[self.opt.lstmHist] = df_do_finalStep
-                df_do = gradOutputsZeroed
-            else
-                f = self.uspCriterion:forward(outputs, targets)
-                df_do = self.uspCriterion:backward(outputs, targets)
             end
 
             self.model:backward(inputs, df_do)

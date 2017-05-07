@@ -61,13 +61,13 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 -- to user action prediction, and the other matches to user outcome(score) prediction
                 mulOutConcatTab = nn.ConcatTable()
                 actSeqNN = nn.Sequential()
-                actSeqNN.add(nn.Linear(24, #classesActs))
-                actSeqNN.add(nn.LogSoftMax())
+                actSeqNN:add(nn.Linear(24, #classesActs))
+                actSeqNN:add(nn.LogSoftMax())
                 scoreSeqNN = nn.Sequential()
-                scoreSeqNN.add(nn.Linear(24, #classesScores))
-                scoreSeqNN.add(nn.LogSoftMax())
-                mulOutConcatTab.add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-                mulOutConcatTab.add(scoreSeqNN) -- {act, outcome(score)}
+                scoreSeqNN:add(nn.Linear(24, #classesScores))
+                scoreSeqNN:add(nn.LogSoftMax())
+                mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
+                mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
 
                 expert:add(mulOutConcatTab)
                 experts:add(expert)
@@ -101,13 +101,13 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             -- to user action prediction, and the other matches to user outcome(score) prediction
             mulOutConcatTab = nn.ConcatTable()
             actSeqNN = nn.Sequential()
-            actSeqNN.add(nn.Linear(24, #classesActs))
-            actSeqNN.add(nn.LogSoftMax())
+            actSeqNN:add(nn.Linear(24, #classesActs))
+            actSeqNN:add(nn.LogSoftMax())
             scoreSeqNN = nn.Sequential()
-            scoreSeqNN.add(nn.Linear(24, #classesScores))
-            scoreSeqNN.add(nn.LogSoftMax())
-            mulOutConcatTab.add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-            mulOutConcatTab.add(scoreSeqNN) -- {act, outcome(score)}
+            scoreSeqNN:add(nn.Linear(24, #classesScores))
+            scoreSeqNN:add(nn.LogSoftMax())
+            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
+            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
 
             self.model:add(mulOutConcatTab)
             ------------------------------------------------------------
@@ -126,13 +126,13 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             -- to user action prediction, and the other matches to user outcome(score) prediction
             mulOutConcatTab = nn.ConcatTable()
             actSeqNN = nn.Sequential()
-            actSeqNN.add(nn.Linear(self.inputFeatureNum, #classesActs))
-            actSeqNN.add(nn.LogSoftMax())
+            actSeqNN:add(nn.Linear(self.inputFeatureNum, #classesActs))
+            actSeqNN:add(nn.LogSoftMax())
             scoreSeqNN = nn.Sequential()
-            scoreSeqNN.add(nn.Linear(self.inputFeatureNum, #classesScores))
-            scoreSeqNN.add(nn.LogSoftMax())
-            mulOutConcatTab.add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-            mulOutConcatTab.add(scoreSeqNN) -- {act, outcome(score)}
+            scoreSeqNN:add(nn.Linear(self.inputFeatureNum, #classesScores))
+            scoreSeqNN:add(nn.LogSoftMax())
+            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
+            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
 
             self.model:add(mulOutConcatTab)
             ------------------------------------------------------------
@@ -152,13 +152,13 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             -- to user action prediction, and the other matches to user outcome(score) prediction
             mulOutConcatTab = nn.ConcatTable()
             actSeqNN = nn.Sequential()
-            actSeqNN.add(nn.Linear(opt.lstmHd, #classesActs))
-            actSeqNN.add(nn.LogSoftMax())
+            actSeqNN:add(nn.Linear(opt.lstmHd, #classesActs))
+            actSeqNN:add(nn.LogSoftMax())
             scoreSeqNN = nn.Sequential()
-            scoreSeqNN.add(nn.Linear(opt.lstmHd, #classesScores))
-            scoreSeqNN.add(nn.LogSoftMax())
-            mulOutConcatTab.add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-            mulOutConcatTab.add(scoreSeqNN) -- {act, outcome(score)}
+            scoreSeqNN:add(nn.Linear(opt.lstmHd, #classesScores))
+            scoreSeqNN:add(nn.LogSoftMax())
+            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
+            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
 
             self.model:add(mulOutConcatTab)
             self.model = nn.Sequencer(self.model)
@@ -189,8 +189,8 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
     self.uaspPrlCriterion = nn.ParallelCriterion()
     self.uapCriterion = nn.ClassNLLCriterion()
     self.uspCriterion = nn.ClassNLLCriterion()
-    self.uaspPrlCriterion.add(self.uapCriterion)   -- action prediction loss function
-    self.uaspPrlCriterion.add(self.uspCriterion)   -- score (outcome) prediction loss function
+    self.uaspPrlCriterion:add(self.uapCriterion)   -- action prediction loss function
+    self.uaspPrlCriterion:add(self.uspCriterion)   -- score (outcome) prediction loss function
     if opt.uppModel == 'lstm' then
         self.uaspPrlCriterion = nn.SequencerCriterion(self.uaspPrlCriterion)
     end
@@ -220,8 +220,8 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             self.uapCriterion = self.uapCriterion:cuda()
             self.uspCriterion = self.uspCriterion:cuda()
             self.uaspPrlCriterion = self.uaspPrlCriterion:cuda()
-            self.uaspPrlCriterion.add(self.uapCriterion)   -- action prediction loss function
-            self.uaspPrlCriterion.add(self.uspCriterion)   -- score (outcome) prediction loss function
+            self.uaspPrlCriterion:add(self.uapCriterion)   -- action prediction loss function
+            self.uaspPrlCriterion:add(self.uspCriterion)   -- score (outcome) prediction loss function
         else
             print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
             print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
@@ -307,7 +307,7 @@ function CIUserActScorePredictor:trainOneEpoch()
     print('<trainer> on training set:')
     print("<trainer> online epoch # " .. self.trainEpoch .. ' [batchSize = ' .. self.opt.batchSize .. ']')
     local inputs
-    local targetsActScore
+    local targetsActScore = {}
     local targetsAct
     local targetsScore
     local t = 1
@@ -338,7 +338,6 @@ function CIUserActScorePredictor:trainOneEpoch()
                 while k <= self.opt.batchSize do
                     local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
                     inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], self.opt.prepro)
-                    targets[k] = self.ciUserSimulator.realUserDataActs[randInd]
                     targetsAct[k] = self.ciUserSimulator.realUserDataActs[randInd]
                     targetsScore[k] = self.ciUserSimulator.realUserDataRewards[randInd]
                     k = k + 1
@@ -415,7 +414,11 @@ function CIUserActScorePredictor:trainOneEpoch()
                 end
             end
 
-            targetsActScore = {targetsAct, targetsScore}
+            for j = 1, self.opt.lstmHist do
+                targetsActScore[j] = {}
+                targetsActScore[j][1] = targetsAct[j]
+                targetsActScore[j][2] = targetsScore[j]
+            end
 
         end
 
@@ -435,17 +438,30 @@ function CIUserActScorePredictor:trainOneEpoch()
             -- evaluate function for complete mini batch
             local outputs = self.model:forward(inputs)
 
+--            if self.opt.uppModel == 'lstm' then
+--                for step=1, self.opt.lstmHist-1 do
+--                    outputs[step][2] = targetsActScore[step][2]:clone() -- This means we only leave the last time step score prediction result as error source
+--                    if self.opt.gpu > 0 then
+--                        outputs[step][2] = outputs[step][2]:cuda()
+--                    end
+--                end
+--            end
+
+            local f = self.uaspPrlCriterion:forward(outputs, targetsActScore) -- I made an experiment. The returned error value (f) from parallelCriterion is the sum of each criterion
+            local df_do = self.uaspPrlCriterion:backward(outputs, targetsActScore)
+
             if self.opt.uppModel == 'lstm' then
+                local subTot_f = 0
+                for s=1, self.opt.lstmHist do
+                    subTot_f = subTot_f + self.uapCriterion:forward(outputs[s][1], targetsActScore[s][1])
+                end
+                f = subTot_f + self.uspCriterion:forward(outputs[self.opt.lstmHist][2], targetsActScore[self.opt.lstmHist][2])
+
                 for step=1, self.opt.lstmHist-1 do
-                    outputs[2][step] = targetsActScore[2][step]:clone() -- This means we only leave the last time step score prediction result as error source
-                    if self.opt.gpu > 0 then
-                        outputs[2][step] = outputs[2][step]:cuda()
-                    end
+                    df_do[step][2]:zero()   -- Zero df_do over Score prediction from time 1 to listHist-1
                 end
             end
 
-            local f = self.uaspPrlCriterion:forward(outputs, targetsActScore)
-            local df_do = self.uaspPrlCriterion:backward(outputs, targetsActScore)
             self.model:backward(inputs, df_do)
 
             -- penalties (L1 and L2):
@@ -461,15 +477,15 @@ function CIUserActScorePredictor:trainOneEpoch()
                 self.uaspDParam:add( sign(self.uaspParam):mul(self.opt.coefL1) + self.uaspParam:clone():mul(self.opt.coefL2) )
             end
 
-            -- update self.uapConfusion
+            -- update self.uapConfusion and self.uspConfusion
             if self.opt.uppModel == 'lstm' then
                 for j = 1, self.opt.lstmHist do
                     for i = 1,self.opt.batchSize do
-                        self.uapConfusion:add(outputs[1][j][i], targetsActScore[1][j][i])
+                        self.uapConfusion:add(outputs[j][1][i], targetsActScore[j][1][i])
                     end
                 end
                 for i = 1,self.opt.batchSize do
-                    self.uspConfusion:add(outputs[2][self.opt.lstmHist][i], targetsActScore[2][self.opt.lstmHist][i])
+                    self.uspConfusion:add(outputs[self.opt.lstmHist][2][i], targetsActScore[self.opt.lstmHist][2][i])
                 end
             else
                 for i = 1,self.opt.batchSize do
@@ -568,14 +584,14 @@ function CIUserActScorePredictor:trainOneEpoch()
             'average rowUcol correct (VOC measure): ' .. (self.uapConfusion.averageUnionValid*100) .. '% \n' ..
             ' + global correct: ' .. (self.uapConfusion.totalValid*100) .. '%'
     print(confMtxStr)
-    self.uaspTrainLogger:add{['% Act Prediction: mean class accuracy (train set)'] = self.uapConfusion.totalValid * 100 }
 
     self.uspConfusion:updateValids()
     confMtxStr = 'Score prediction: average row correct: ' .. (self.uspConfusion.averageValid*100) .. '% \n' ..
             'average rowUcol correct (VOC measure): ' .. (self.uspConfusion.averageUnionValid*100) .. '% \n' ..
             ' + global correct: ' .. (self.uspConfusion.totalValid*100) .. '%'
     print(confMtxStr)
-    self.uaspTrainLogger:add{['% Score Prediction: mean class accuracy (train set)'] = self.uspConfusion.totalValid * 100}
+    self.uaspTrainLogger:add{['% Act Prediction: mean class accuracy (train set)'] = self.uapConfusion.totalValid * 100,
+        ['% Score Prediction: mean class accuracy (train set)'] = self.uspConfusion.totalValid * 100}
 
 
     -- save/log current net
