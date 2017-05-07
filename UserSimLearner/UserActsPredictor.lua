@@ -240,7 +240,6 @@ function CIUserActsPredictor:trainOneEpoch()
     local inputs
     local targets
     local t = 1
-    local lstmLengthPerBatch = math.ceil(#self.ciUserSimulator.realUserDataStates / self.opt.batchSize)
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
     local epochDone = false
     while not epochDone do

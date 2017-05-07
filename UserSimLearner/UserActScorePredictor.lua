@@ -304,25 +304,29 @@ function CIUserActScorePredictor:trainOneEpoch()
     print('<trainer> on training set:')
     print("<trainer> online epoch # " .. self.trainEpoch .. ' [batchSize = ' .. self.opt.batchSize .. ']')
     local inputs
-    local targets
+    local targetsActScore
+    local targetsAct
+    local targetsScore
     local t = 1
-    local lstmLengthPerBatch = math.ceil(#self.ciUserSimulator.realUserDataStates / self.opt.batchSize)
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
     local epochDone = false
     while not epochDone do
         if self.opt.uppModel ~= 'lstm' then
             -- create mini batch
             inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
-            targets = torch.Tensor(self.opt.batchSize)
+            targetsAct = torch.Tensor(self.opt.batchSize)
+            targetsScore = torch.Tensor(self.opt.batchSize)
             local k = 1
             for i = t, math.min(t+self.opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
                 -- load new sample
                 local input = self.ciUserSimulator.realUserDataStates[i]    -- :clone() -- if preprocess is called, clone is not needed, I believe
                 -- need do preprocess for input features
                 input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                local target = self.ciUserSimulator.realUserDataActs[i]
+                local singleTargetAct = self.ciUserSimulator.realUserDataActs[i]
+                local singleTargetScore = self.ciUserSimulator.realUserDataRewards[i]
                 inputs[k] = input
-                targets[k] = target
+                targetsAct[k] = singleTargetAct
+                targetsScore[k] = singleTargetScore
                 k = k + 1
             end
 
@@ -332,6 +336,8 @@ function CIUserActScorePredictor:trainOneEpoch()
                     local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
                     inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], self.opt.prepro)
                     targets[k] = self.ciUserSimulator.realUserDataActs[randInd]
+                    targetsAct[k] = self.ciUserSimulator.realUserDataActs[randInd]
+                    targetsScore[k] = self.ciUserSimulator.realUserDataRewards[randInd]
                     k = k + 1
                 end
             end
@@ -343,24 +349,31 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
-                targets = targets:cuda()
+                targetsAct = targetsAct:cuda()
+                targetsScore = targetsScore:cuda()
             end
+
+            targetsActScore = {targetsAct, targetsScore}
 
         else
             -- lstm
             inputs = {}
-            targets = {}
+            targetsAct = {}
+            targetsScore = {}
             local k
             for j = 1, self.opt.lstmHist do
                 inputs[j] = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
-                targets[j] = torch.Tensor(self.opt.batchSize)
+                targetsAct[j] = torch.Tensor(self.opt.batchSize)
+                targetsScore[j] = torch.Tensor(self.opt.batchSize)
                 k = 1
                 for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
                     local input = self.rnnRealUserDataStates[i][j]
                     input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                    local target = self.rnnRealUserDataActs[i][j]
+                    local singleTargetAct = self.rnnRealUserDataActs[i][j]
+                    local singleTargetScore = self.rnnRealUserDataRewards[i][j]
                     inputs[j][k] = input
-                    targets[j][k] = target
+                    targetsAct[j][k] = singleTargetAct
+                    targetsScore[j][k] = singleTargetScore
                     k = k + 1
                 end
             end
@@ -372,9 +385,11 @@ function CIUserActScorePredictor:trainOneEpoch()
                     for j = 1, self.opt.lstmHist do
                         local input = self.rnnRealUserDataStates[randInd][j]
                         input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                        local target = self.rnnRealUserDataActs[randInd][j]
+                        local singleTargetAct = self.rnnRealUserDataActs[randInd][j]
+                        local singleTargetScore = self.rnnRealUserDataRewards[randInd][j]
                         inputs[j][k] = input
-                        targets[j][k] = target
+                        targetsAct[j][k] = singleTargetAct
+                        targetsScore[j][k] = singleTargetScore
                     end
                     k = k + 1
                 end
@@ -389,10 +404,15 @@ function CIUserActScorePredictor:trainOneEpoch()
                 for _,v in pairs(inputs) do
                     v = v:cuda()
                 end
-                for _,v in pairs(targets) do
+                for _,v in pairs(targetsAct) do
+                    v = v:cuda()
+                end
+                for _,v in pairs(targetsScore) do
                     v = v:cuda()
                 end
             end
+
+            targetsActScore = {targetsAct, targetsScore}
 
         end
 
