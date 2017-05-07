@@ -2,6 +2,7 @@ local CIFileReader = require 'file_reader'
 local CIUserSimulator = require 'UserSimulator'
 local CIUserActsPredictor = require 'UserSimLearner/UserActsPredictor'
 local CIUserScorePredictor = require 'UserSimLearner/UserScorePredictor'
+local CIUserActScorePredictor = require 'UserSimLearner/UserActScorePredictor'
 local CIUserBehaviorGenerator = require 'UserSimLearner/UserBehaviorGenerator'
 local CIUserBehaviorGenEvaluator = require 'UserSimLearner/UserBehaviorGenEvaluator'
 
@@ -31,6 +32,7 @@ opt = lapp[[
        --actSmpLen        (default 6)           The sampling candidate list length for user action generation
        --ciuTType         (default "train")     Training or testing for use sim model train | test
        --actEvaScp        (default 1)           The action selection range in prediction evaluation calculation
+       --sharedLayer        (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
     ]]
 
 -- threads and default tensor type
@@ -45,15 +47,20 @@ fr:evaluateSurveyData()
 -- Construct CI user simulator model using real user data
 local CIUserModel = CIUserSimulator(fr, opt)
 
-if opt.trType == 'sc' then
+if opt.trType == 'sc' and opt.sharedLayer < 1 then
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     for i=1, 2e5 do
         CIUserScorePred:trainOneEpoch()
     end
-elseif opt.trType == 'ac' then
+elseif opt.trType == 'ac' and opt.sharedLayer < 1 then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     for i=1, 2e5 do
         CIUserActsPred:trainOneEpoch()
+    end
+elseif (opt.trType == 'ac' or opt.trType == 'sc') and opt.sharedLayer == 1 then
+    local CIUserActScorePred = CIUserActScorePredictor(CIUserModel, opt)
+    for i=1, 2e5 do
+        CIUserActScorePred:trainOneEpoch()
     end
 elseif opt.trType == 'bg' then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
