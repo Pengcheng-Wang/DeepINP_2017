@@ -70,6 +70,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
 
                 expert:add(mulOutConcatTab)
+                expert:add(nn.JoinTable(-1))
                 experts:add(expert)
             end
 
@@ -438,14 +439,14 @@ function CIUserActScorePredictor:trainOneEpoch()
             -- evaluate function for complete mini batch
             local outputs = self.model:forward(inputs)
 
---            if self.opt.uppModel == 'lstm' then
---                for step=1, self.opt.lstmHist-1 do
---                    outputs[step][2] = targetsActScore[step][2]:clone() -- This means we only leave the last time step score prediction result as error source
---                    if self.opt.gpu > 0 then
---                        outputs[step][2] = outputs[step][2]:cuda()
---                    end
---                end
---            end
+            -- Here, if moe is used with shared lower layers, it is the problem that,
+            -- due to limitation of MixtureTable module, we have to join tables together as
+            -- a single tensor as output of the whole user action and score prediction model.
+            -- So, to guarantee the compatability, we need split the tensor into two tables here,
+            -- for act prediction and score prediction respectively.
+            if self.opt.uppModel == 'moe' then
+                outputs = outputs:split(#classesActs, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
+            end
 
             local f = self.uaspPrlCriterion:forward(outputs, targetsActScore) -- I made an experiment. The returned error value (f) from parallelCriterion is the sum of each criterion
             local df_do = self.uaspPrlCriterion:backward(outputs, targetsActScore)
@@ -460,6 +461,11 @@ function CIUserActScorePredictor:trainOneEpoch()
                 for step=1, self.opt.lstmHist-1 do
                     df_do[step][2]:zero()   -- Zero df_do over Score prediction from time 1 to listHist-1
                 end
+            end
+
+            -- If moe with shared lower layers, we merge the df_do before backprop
+            if self.opt.uppModel == 'moe' then
+                df_do = nn.JoinTable(-1):forward(df_do)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
             end
 
             self.model:backward(inputs, df_do)
