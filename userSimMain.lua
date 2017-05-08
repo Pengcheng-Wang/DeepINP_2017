@@ -122,10 +122,10 @@ elseif opt.trType == 'rl' then
         adpTotLen = adpTotLen + adpCnt
     end
     print('In user behaviro generation in', gens, 'times, avg len:', adpTotLen/gens, 'Adp types:', adpLenType)
-elseif opt.trType == 'ev' then
+elseif opt.trType == 'ev' and opt.sharedLayer < 1 then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
-    local CIUserBehaviorGen = CIUserBehaviorGenEvaluator(CIUserModel, CIUserActsPred, CIUserScorePred, opt)
+    local CIUserBehaviorGen = CIUserBehaviorGenEvaluator(CIUserModel, CIUserActsPred, CIUserScorePred, nil, opt)
 end
 
 
