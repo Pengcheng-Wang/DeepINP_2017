@@ -6,7 +6,7 @@
 -- This script is modified from UserActsPredictor.lua and UserScorePredictor.lua
 -- This script creates a NN model which combines user action and score prediction.
 --
--- Todo: pwang8. May 6. Need to add an opt field to indicate whether using separate Action/Score models or unique model
+
 require 'torch'
 require 'nn'
 require 'nnx'

@@ -368,10 +368,22 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
 
     end
 
+    -- Calculate Micro and Macro precision, recall and F1 scores
     local actPreMicro = actPredTP:sum() / (actPredTP:sum() + actPredFP:sum())
     local actRecMicro = actPredTP:sum() / (actPredTP:sum() + actPredFN:sum())
-    print('Act Prediction Micro F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
-    -- Todo: pwang8. May 8. Time to calc Macro F1 and F1 for score prediction.
+    print('Act Prediction Micro Precision: ', actPreMicro, ', Recall: ', actRecMicro, ', F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
+
+    local actPreMacro = torch.cdiv(actPredTP, actPredTP + actPredFP):sum() / CIUserSimulator.CIFr.usrActInd_end
+    local actRecMacro = torch.cdiv(actPredTP, actPredTP + actPredFN):sum() / CIUserSimulator.CIFr.usrActInd_end
+    print('Act Prediction Macro Precision: ', actPreMacro, ', Recall: ', actRecMacro, ', F1: ', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))
+
+    local scorePreMicro = scorePredTP:sum() / (scorePredTP:sum() + scorePredFP:sum())
+    local scoreRecMicro = scorePredTP:sum() / (scorePredTP:sum() + scorePredFN:sum())
+    print('Score Prediction Micro Precision: ', scorePreMicro, ', Recall: ', scoreRecMicro, ', F1: ', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro))
+
+    local scorePreMacro = torch.cdiv(scorePredTP, scorePredTP + scorePredFP):sum() / 2
+    local scoreRecMacro = torch.cdiv(scorePredTP, scorePredTP + scorePredFN):sum() / 2
+    print('Score Prediction Macro Precision: ', scorePreMacro, ', Recall: ', scoreRecMacro, ', F1: ', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))
 
 end
 
