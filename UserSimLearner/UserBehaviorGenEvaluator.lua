@@ -36,7 +36,7 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
 
     local countScope=0  -- This param is used to calculate action distribution at countScope time step
 
-    if opt.sharedLayer < 1 then
+    if opt.uSimShLayer < 1 then
 
         -- Bipartitle Act/Score prediction model
         -- The user action/score predictors for evaluation should be pre-trained, and loaded from files
@@ -53,7 +53,7 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
         self.opt = opt
 
         if opt.uppModel == 'lstm' then
-            -- sharedLayer == 0 and lstm model
+            -- uSimShLayer == 0 and lstm model
 --            self._actionDistributionCalc(CIUserSimulator, countScope)
 
             self.userActsPred:forget()
@@ -131,7 +131,7 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
             print('###', crcActCnt/tltCnt, crcRewCnt/#CIUserActsPred.rnnRealUserDataEnds, torch.cdiv(earlyCrcAct, earlyTotAct))
 
         else
-            -- sharedLayer == 0 and not lstm models
+            -- uSimShLayer == 0 and not lstm models
             for i=1, #CIUserSimulator.realUserDataStates do
                 local userState = CIUserSimulator:preprocessUserStateData(CIUserSimulator.realUserDataStates[i], opt.prepro)
                 local userAct = CIUserSimulator.realUserDataActs[i]
@@ -199,7 +199,7 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
         end
 
     else
-        -- opt.sharedLayer == 1
+        -- opt.uSimShLayer == 1
         -- Unique Act/Score prediction model with shared lower layers
         -- The user action/score predictors for evaluation should be pre-trained, and loaded from files
         -- Also, the CIUserSimulator, CIUserActsPred, CIUserScorePred should be initialized using
@@ -212,7 +212,7 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
         self.opt = opt
 
         if opt.uppModel == 'lstm' then
-            -- sharedLayer == 1 and lstm model
+            -- uSimShLayer == 1 and lstm model
 
             --            self._actionDistributionCalc(CIUserSimulator, countScope)
 

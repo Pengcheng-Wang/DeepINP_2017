@@ -25,14 +25,14 @@ opt = lapp[[
        --prepro           (default "std")       input state feature preprocessing: rsc | std
        --lstmHd           (default 192)          lstm hidden layer size
        --lstmHist         (default 6)           lstm hist length. This influence the rnn tensor table construction in data preparation
-       --lstmBackProp         (default 3)           The maximum step applied in btpp in lstm
+       --uSimLstmBackLen         (default 3)           The maximum step applied in btpp in lstm
        --ubgDir           (default "ubgModel")  directory storing uap and usp models
        --uapFile          (default "uap.t7")          file storing userActsPredictor model
        --uspFile          (default "usp.t7")          file storing userScorePredictor model
-       --actSmpLen        (default 6)           The sampling candidate list length for user action generation
+       --actSmpLen        (default 8)           The sampling candidate list length for user action generation
        --ciuTType         (default "train")     Training or testing for use sim model train | test
        --actEvaScp        (default 1)           The action selection range in prediction evaluation calculation
-       --sharedLayer        (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
+       --uSimShLayer        (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
     ]]
 
 -- threads and default tensor type
@@ -47,17 +47,17 @@ fr:evaluateSurveyData()
 -- Construct CI user simulator model using real user data
 local CIUserModel = CIUserSimulator(fr, opt)
 
-if opt.trType == 'sc' and opt.sharedLayer < 1 then
+if opt.trType == 'sc' and opt.uSimShLayer < 1 then
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     for i=1, 2e5 do
         CIUserScorePred:trainOneEpoch()
     end
-elseif opt.trType == 'ac' and opt.sharedLayer < 1 then
+elseif opt.trType == 'ac' and opt.uSimShLayer < 1 then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     for i=1, 2e5 do
         CIUserActsPred:trainOneEpoch()
     end
-elseif (opt.trType == 'ac' or opt.trType == 'sc') and opt.sharedLayer == 1 then
+elseif (opt.trType == 'ac' or opt.trType == 'sc') and opt.uSimShLayer == 1 then
     local CIUserActScorePred = CIUserActScorePredictor(CIUserModel, opt)
     for i=1, 2e5 do
         CIUserActScorePred:trainOneEpoch()
@@ -122,7 +122,7 @@ elseif opt.trType == 'rl' then
         adpTotLen = adpTotLen + adpCnt
     end
     print('In user behaviro generation in', gens, 'times, avg len:', adpTotLen/gens, 'Adp types:', adpLenType)
-elseif opt.trType == 'ev' and opt.sharedLayer < 1 then
+elseif opt.trType == 'ev' and opt.uSimShLayer < 1 then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     local CIUserBehaviorGen = CIUserBehaviorGenEvaluator(CIUserModel, CIUserActsPred, CIUserScorePred, nil, opt)
