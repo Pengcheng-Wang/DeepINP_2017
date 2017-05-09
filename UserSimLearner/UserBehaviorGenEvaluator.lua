@@ -25,6 +25,15 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
     local earlyCrcAct = torch.Tensor(opt.lstmHist+81):fill(0)
     local firstActDist = torch.Tensor(CIUserSimulator.CIFr.usrActInd_end):fill(0)   -- 15 user actions
 
+    -- Confusion matrix for action prediction (15 class)
+    local actPredTP = torch.Tensor(CIUserSimulator.CIFr.usrActInd_end):fill(1e-3)
+    local actPredFP = torch.Tensor(CIUserSimulator.CIFr.usrActInd_end):fill(1e-3)
+    local actPredFN = torch.Tensor(CIUserSimulator.CIFr.usrActInd_end):fill(1e-3)
+    -- Confusion matrix for positive score (outcome) prediction (binary)
+    local scorePredTP = torch.Tensor(2):fill(1e-3)
+    local scorePredFP = torch.Tensor(2):fill(1e-3)
+    local scorePredFN = torch.Tensor(2):fill(1e-3)
+
     local countScope=0  -- This param is used to calculate action distribution at countScope time step
 
     if opt.sharedLayer < 1 then
@@ -65,6 +74,15 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
                 local nll_acts = self.userActsPred:forward(tabState)
                 lp, ain = torch.max(nll_acts[opt.lstmHist]:squeeze(), 1)
                 if i == CIUserActsPred.rnnRealUserDataStarts[userInd]+countScope then firstActDist[ain[1]] = firstActDist[ain[1]]+1 end   -- check act dist at each x-th time step
+
+                -- update action prediction confusion matrix
+                if ain[1] == userAct[opt.lstmHist] then
+                    actPredTP[ain[1]] = actPredTP[ain[1]] + 1
+                else
+                    actPredFP[ain[1]] = actPredFP[ain[1]] + 1
+                    actPredFN[userAct[opt.lstmHist]] = actPredFN[userAct[opt.lstmHist]] + 1
+                end
+
                 --            if ain[1] == userAct[opt.lstmHist] then crcActCnt = crcActCnt + 1 end
                 lpy, lps = torch.sort(nll_acts[opt.lstmHist]:squeeze(), 1, true)
                 local crtExt = false
@@ -88,9 +106,18 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
                     userInd = userInd+1
                 end
 
-                local nll_rewards = self.userScorePred:forward(tabState)
-                lp, rin = torch.max(nll_rewards[opt.lstmHist]:squeeze(), 1)
-                if userAct[opt.lstmHist] == CIUserSimulator.CIFr.usrActInd_end and rin[1] == userRew[opt.lstmHist] then crcRewCnt = crcRewCnt + 1 end
+                if userAct[opt.lstmHist] == CIUserSimulator.CIFr.usrActInd_end then
+                    local nll_rewards = self.userScorePred:forward(tabState)
+                    lp, rin = torch.max(nll_rewards[opt.lstmHist]:squeeze(), 1)
+                    if rin[1] == userRew[opt.lstmHist] then
+                        crcRewCnt = crcRewCnt + 1
+                        -- update score prediction confusion matrix
+                        scorePredTP[rin[1]] = scorePredTP[rin[1]] + 1
+                    else
+                        scorePredFP[rin[1]] = scorePredFP[rin[1]] + 1
+                        scorePredFN[userRew[opt.lstmHist]] = scorePredFN[userRew[opt.lstmHist]] + 1
+                    end
+                end
 
                 tltCnt = tltCnt + 1
 
@@ -117,6 +144,15 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
                 lp, ain = torch.max(nll_acts[1]:squeeze(), 1)
 
                 if i == CIUserSimulator.realUserDataStartLines[userInd]+countScope then firstActDist[ain[1]] = firstActDist[ain[1]]+1 end   -- check act dist at each x-th time step
+
+                -- update action prediction confusion matrix
+                if ain[1] == userAct then
+                    actPredTP[ain[1]] = actPredTP[ain[1]] + 1
+                else
+                    actPredFP[ain[1]] = actPredFP[ain[1]] + 1
+                    actPredFN[userAct] = actPredFN[userAct] + 1
+                end
+
                 --            if ain[1] == userAct[opt.lstmHist] then crcActCnt = crcActCnt + 1 end
                 lpy, lps = torch.sort(nll_acts[1]:squeeze(), 1, true)
                 local crtExt = false
@@ -140,9 +176,18 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
                     userInd = userInd+1
                 end
 
-                local nll_rewards = self.userScorePred:forward(prepUserState)
-                lp, rin = torch.max(nll_rewards[1]:squeeze(), 1)
-                if userAct == CIUserSimulator.CIFr.usrActInd_end and rin[1] == userRew then crcRewCnt = crcRewCnt + 1 end
+                if userAct == CIUserSimulator.CIFr.usrActInd_end then
+                    local nll_rewards = self.userScorePred:forward(prepUserState)
+                    lp, rin = torch.max(nll_rewards[1]:squeeze(), 1)
+                    if rin[1] == userRew then
+                        crcRewCnt = crcRewCnt + 1
+                        -- update score prediction confusion matrix
+                        scorePredTP[rin[1]] = scorePredTP[rin[1]] + 1
+                    else
+                        scorePredFP[rin[1]] = scorePredFP[rin[1]] + 1
+                        scorePredFN[userRew] = scorePredFN[userRew] + 1
+                    end
+                end
 
                 tltCnt = tltCnt + 1
 
@@ -188,6 +233,15 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
                 local nll_acts = self.userActScorePred:forward(tabState)
                 lp, ain = torch.max(nll_acts[opt.lstmHist][1]:squeeze(), 1)     -- then 2nd [1] index is for action prediction from the shared act/score prediction outcome
                 if i == CIUserActScorePred.rnnRealUserDataStarts[userInd]+countScope then firstActDist[ain[1]] = firstActDist[ain[1]]+1 end   -- check act dist at each x-th time step
+
+                -- update action prediction confusion matrix
+                if ain[1] == userAct[opt.lstmHist] then
+                    actPredTP[ain[1]] = actPredTP[ain[1]] + 1
+                else
+                    actPredFP[ain[1]] = actPredFP[ain[1]] + 1
+                    actPredFN[userAct[opt.lstmHist]] = actPredFN[userAct[opt.lstmHist]] + 1
+                end
+
                 --            if ain[1] == userAct[opt.lstmHist] then crcActCnt = crcActCnt + 1 end
                 lpy, lps = torch.sort(nll_acts[opt.lstmHist][1]:squeeze(), 1, true)
                 local crtExt = false
@@ -211,9 +265,18 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
                     userInd = userInd+1
                 end
 
-                -- The predicted reward is the 2nd output of nll_acts in 2nd dim
-                lp, rin = torch.max(nll_acts[opt.lstmHist][2]:squeeze(), 1)
-                if userAct[opt.lstmHist] == CIUserSimulator.CIFr.usrActInd_end and rin[1] == userRew[opt.lstmHist] then crcRewCnt = crcRewCnt + 1 end
+                if userAct[opt.lstmHist] == CIUserSimulator.CIFr.usrActInd_end then
+                    -- The predicted reward is the 2nd output of nll_acts in 2nd dim
+                    lp, rin = torch.max(nll_acts[opt.lstmHist][2]:squeeze(), 1)
+                    if rin[1] == userRew[opt.lstmHist] then
+                        crcRewCnt = crcRewCnt + 1
+                        -- update score prediction confusion matrix
+                        scorePredTP[rin[1]] = scorePredTP[rin[1]] + 1
+                    else
+                        scorePredFP[rin[1]] = scorePredFP[rin[1]] + 1
+                        scorePredFN[userRew[opt.lstmHist]] = scorePredFN[userRew[opt.lstmHist]] + 1
+                    end
+                end
 
                 tltCnt = tltCnt + 1
 
@@ -246,9 +309,18 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
                     nll_acts = nll_acts:split(CIUserSimulator.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
                 end
 
-                lp, ain = torch.max(nll_acts[1][1]:squeeze(), 1)
+                lp, ain = torch.max(nll_acts[1][1]:squeeze(), 1)    -- The 1st [1] index means action prediction output from a table, 2nd [1] is batch index, which is not necessary
 
                 if i == CIUserSimulator.realUserDataStartLines[userInd]+countScope then firstActDist[ain[1]] = firstActDist[ain[1]]+1 end   -- check act dist at each x-th time step
+
+                -- update action prediction confusion matrix
+                if ain[1] == userAct then
+                    actPredTP[ain[1]] = actPredTP[ain[1]] + 1
+                else
+                    actPredFP[ain[1]] = actPredFP[ain[1]] + 1
+                    actPredFN[userAct] = actPredFN[userAct] + 1
+                end
+
                 --            if ain[1] == userAct[opt.lstmHist] then crcActCnt = crcActCnt + 1 end
                 lpy, lps = torch.sort(nll_acts[1][1]:squeeze(), 1, true)
                 local crtExt = false
@@ -272,9 +344,18 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
                     userInd = userInd+1
                 end
 
-                -- The predicted reward is the 2nd output of nll_acts in 2nd dim
-                lp, rin = torch.max(nll_acts[2][1]:squeeze(), 1)
-                if userAct == CIUserSimulator.CIFr.usrActInd_end and rin[1] == userRew then crcRewCnt = crcRewCnt + 1 end
+                if userAct == CIUserSimulator.CIFr.usrActInd_end then
+                    -- The predicted reward is the 2nd output of nll_acts in 2nd dim
+                    lp, rin = torch.max(nll_acts[2][1]:squeeze(), 1)
+                    if rin[1] == userRew then
+                        crcRewCnt = crcRewCnt + 1
+                        -- update score prediction confusion matrix
+                        scorePredTP[rin[1]] = scorePredTP[rin[1]] + 1
+                    else
+                        scorePredFP[rin[1]] = scorePredFP[rin[1]] + 1
+                        scorePredFN[userRew] = scorePredFN[userRew] + 1
+                    end
+                end
 
                 tltCnt = tltCnt + 1
 
@@ -286,6 +367,12 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
         end
 
     end
+
+    local actPreMicro = actPredTP:sum() / (actPredTP:sum() + actPredFP:sum())
+    local actRecMicro = actPredTP:sum() / (actPredTP:sum() + actPredFN:sum())
+    print('Act Prediction Micro F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
+    -- Todo: pwang8. May 8. Time to calc Macro F1 and F1 for score prediction.
+
 end
 
 function CIUserBehaviorGenEvaluator:_actionDistributionCalc(CIUserSimulator, cntScope)
