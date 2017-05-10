@@ -197,7 +197,7 @@ function CIUserBehaviorPredictor:sampleOneTraj()
     lpy = torch.cumsum(lpy)
     local rwdSampleLen = 2  -- two types of rewards assumption in CI
     --        lpy = torch.div(lpy, lpy[rwdSampleLen])
-    local greedySmpThres = 0.65     --self.opt.rwdSmpEps
+    local greedySmpThres = self.opt.rwdSmpEps
 
     local scoreType = lps[1]  -- the action result given by the action predictor
     if torch.uniform() > greedySmpThres then
@@ -440,7 +440,7 @@ function CIUserBehaviorPredictor:step(adpAct)
         lpy = torch.cumsum(lpy)
         local rwdSampleLen = 2  -- two types of rewards assumption in CI
         --        lpy = torch.div(lpy, lpy[rwdSampleLen])
-        local greedySmpThres = 0.65 -- opt.rwdSmpEps
+        local greedySmpThres = self.opt.rwdSmpEps
 
         local scoreType = lps[1]  -- the action result given by the action predictor
         if torch.uniform() > greedySmpThres then

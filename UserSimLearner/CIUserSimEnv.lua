@@ -348,45 +348,76 @@ end
 function CIUserSimEnv:step(adpAct)
     assert(adpAct >= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][1] and adpAct <= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][2])
 
-    self.nextSingleStepStateRaw = self.tabRnnStateRaw[self.opt.lstmHist]:clone()
-    self.CIUSim:applyAdpActOnState(self.nextSingleStepStateRaw, self.adpType, adpAct)
-
-    repeat
-
-        self.CIUSim:applyUserActOnState(self.nextSingleStepStateRaw, self.curRnnUserAct)
-        -- reconstruct rnn state table for next time step
-        for j=1, self.opt.lstmHist-1 do
-            self.tabRnnStateRaw[j] = self.tabRnnStateRaw[j+1]:clone()
-        end
-        self.tabRnnStateRaw[self.opt.lstmHist] = self.nextSingleStepStateRaw:clone()
-
-        self.timeStepCnt = self.timeStepCnt + 1
-        self:_updateRnnStatePrep()
-        self:_calcUserAct()
-
-        --        print(self.timeStepCnt, 'time step state:') for k,v in ipairs(self.tabRnnStateRaw) do print(k,v) end
-        --        print(self.timeStepCnt, 'time step act:', self.curRnnUserAct)
-
-        -- When user ap/sp state and action were given, check if adaptation could be triggered
-        self.adpTriggered, self.adpType = self.CIUSim:isAdpTriggered(self.tabRnnStateRaw[self.opt.lstmHist], self.curRnnUserAct)
+    if opt.uppModel == 'lstm' then
 
         self.nextSingleStepStateRaw = self.tabRnnStateRaw[self.opt.lstmHist]:clone()
+        self.CIUSim:applyAdpActOnState(self.nextSingleStepStateRaw, self.adpType, adpAct)
 
-    until self.adpTriggered or self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
+        repeat
+
+            self.CIUSim:applyUserActOnState(self.nextSingleStepStateRaw, self.curRnnUserAct)
+            -- reconstruct rnn state table for next time step
+            for j=1, self.opt.lstmHist-1 do
+                self.tabRnnStateRaw[j] = self.tabRnnStateRaw[j+1]:clone()
+            end
+            self.tabRnnStateRaw[self.opt.lstmHist] = self.nextSingleStepStateRaw:clone()
+
+            self.timeStepCnt = self.timeStepCnt + 1
+            self:_updateRnnStatePrep()
+            self:_calcUserAct()
+
+            --        print(self.timeStepCnt, 'time step state:') for k,v in ipairs(self.tabRnnStateRaw) do print(k,v) end
+            --        print(self.timeStepCnt, 'time step act:', self.curRnnUserAct)
+
+            -- When user ap/sp state and action were given, check if adaptation could be triggered
+            self.adpTriggered, self.adpType = self.CIUSim:isAdpTriggered(self.tabRnnStateRaw[self.opt.lstmHist], self.curRnnUserAct)
+
+            self.nextSingleStepStateRaw = self.tabRnnStateRaw[self.opt.lstmHist]:clone()
+
+        until self.adpTriggered or self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
+
+    else
+        -- non-lstm models
+        self.CIUSim:applyAdpActOnState(self.curOneStepStateRaw, self.adpType, adpAct)
+
+        repeat
+
+            self.CIUSim:applyUserActOnState(self.curOneStepStateRaw, self.curOneStepAct)
+
+            self.timeStepCnt = self.timeStepCnt + 1
+            self:_updateOneStepStatePrep()
+            self:_calcUserAct()
+
+            --            print(self.timeStepCnt, 'time step state:', self.curOneStepStateRaw)
+            --            print(self.timeStepCnt, 'time step act:', self.curOneStepAct)
+
+            -- When user ap/sp state and action were given, check if adaptation could be triggered
+            self.adpTriggered, self.adpType = self.CIUSim:isAdpTriggered(self.curOneStepStateRaw, self.curOneStepAct)
+
+        until self.adpTriggered or self.curOneStepAct == self.CIUSim.CIFr.usrActInd_end
+
+    end
 
     -- Attention: we guarantee that the ending user action will not trigger adaptation
     if self.adpTriggered then
         --        print('--- Adp triggered')
+        if opt.uppModel == 'lstm' then
+            self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
 
-        self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
+            -- Need to add the user action's effect on rl state
+            self.CIUSim:applyUserActOnState(self.rlStateRaw, self.curRnnUserAct)
+        else
+            -- non-lstm models
+            self.rlStateRaw[1][1] = self.curOneStepStateRaw -- copy the last time step RAW state representation. Clone() is not needed.
 
-        -- Need to add the user action's effect on rl state
-        self.CIUSim:applyUserActOnState(self.rlStateRaw, self.curRnnUserAct)
+            -- Need to add the user action's effect on rl state
+            self.CIUSim:applyUserActOnState(self.rlStateRaw, self.curOneStepAct)
+        end
 
         -- Need to add the user action's effect on rl state
         self.rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(self.rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
-        --        print('--- After apply user act, rl state:', self.rlStateRaw[1][1])
-        --        print('--- Prep rl state', self.rlStatePrep[1][1])
+        --            print('--- After apply user act, rl state:', self.rlStateRaw[1][1])
+        --            print('--- Prep rl state', self.rlStatePrep[1][1])
         -- Should get action choice from the RL agent here
 
         self:_updateRLStatePrepTypeInd()
@@ -394,18 +425,60 @@ function CIUserSimEnv:step(adpAct)
         return 0, self.rlStatePrepTypeInd, false, self.adpType
 
     else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
-        self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
+
+        if opt.uppModel == 'lstm' then
+            self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
+        else
+            -- non-lstm models
+            self.rlStateRaw[1][1] = self.curOneStepStateRaw -- copy the last time step RAW state representation. Clone() is not needed.
+        end
         -- Does not need to apply an ending user action. It will not change state representation.
         -- Need to add the user action's effect on rl state
         self.rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(self.rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
 
-        local nll_rewards = self.userScorePred:forward(self.tabRnnStatePrep)
---        lp, rin = torch.max(nll_rewards[self.opt.lstmHist]:squeeze(), 1)
-        local nll_rwd = nll_rewards[self.opt.lstmHist]:squeeze()
-        --        print('Predicted reward:', rin[1], torch.exp(nll_rewards[self.opt.lstmHist]:squeeze()))
-        --        print('--====== End')
+        --- Score (outcome) prediction
+        local nll_rewards
+        local nll_rwd
 
-        --        print('Action choice likelihood Next time step:\n', torch.exp(nll_acts))
+        if opt.uSimShLayer < 1 then
+            -- Bipartite actoin, outcome (score) prediction models
+            if opt.uppModel == 'lstm' then
+                self:_updateRnnStatePrep()
+                self.userScorePred:forget()
+                nll_rewards = self.userScorePred:forward(self.tabRnnStatePrep)
+                nll_rwd = nll_rewards[self.opt.lstmHist]:squeeze()
+            else
+                -- non-lstm models
+                self:_updateOneStepStatePrep()
+                nll_rewards = self.userScorePred:forward(self.curOneStepStatePrep)
+                nll_rwd = nll_rewards:squeeze()
+            end
+        else
+            -- opt.uSimShLayer == 1
+            -- Unified action, outcome (score) prediction models with shared layer structure
+            if opt.uppModel == 'lstm' then
+                self:_updateRnnStatePrep()
+                self.userActScorePred:forget()
+                nll_rewards = self.userActsPred:forward(self.tabRnnStatePrep)[self.opt.lstmHist][2] -- get act choice output for last time step
+                nll_rwd = nll_rewards:squeeze()
+            else
+                -- non-lstm models
+                self:_updateOneStepStatePrep()
+                -- non-lstm models
+                nll_rewards = self.userActsPred:forward(self.curOneStepStatePrep)
+                -- Here, if moe is used with shared lower layers, it is the problem that,
+                -- due to limitation of MixtureTable module, we have to join tables together as
+                -- a single tensor as output of the whole user action and score prediction model.
+                -- So, to guarantee the compatability, we need split the tensor into two tables here,
+                -- for act prediction and score prediction respectively.
+                if opt.uppModel == 'moe' then
+                    nll_rewards = nll_rewards:split(self.CIUSim.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
+                end
+                nll_rwd = nll_rewards[2]:squeeze()
+            end
+        end
+
+
         local lpy   -- log likelihood value
         local lps   -- sorted index in desendent-order
         lpy, lps = torch.sort(nll_rwd, 1, true)
