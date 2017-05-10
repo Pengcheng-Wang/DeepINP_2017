@@ -33,6 +33,8 @@ opt = lapp[[
        --actSmpLen        (default 8)           The sampling candidate list length for user action generation
        --ciuTType         (default "train")     Training or testing for use sim model train | test
        --actEvaScp        (default 1)           The action selection range in prediction evaluation calculation
+       --actSmpEps        (default 0)           User action sampling threshold. If rand se than this value, reture 1st pred
+       --rwdSmpEps        (default 0)           User reward sampling threshold. If rand se than this value, reture 1st pred
        --uSimShLayer        (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
     ]]
 
