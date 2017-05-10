@@ -172,6 +172,11 @@ function CIUserSimEnv:_calcUserAct()
         end
     end
 
+    --- The following code controls happening of ending user action
+    -- if user action sequence is too long, we can manually add this end
+    -- action to terminate the sequence, at the same time influence the
+    -- action distribution a little. This can be a safe design, but does
+    -- not have to be necessary.
 --    if self.timeStepCnt >= self.opt.termActSmgLen then
 --        if torch.uniform() < self.opt.termActSmgEps then
 --            self.curRnnUserAct = self.CIUSim.CIFr.usrActInd_end
@@ -343,7 +348,7 @@ function CIUserSimEnv:start()
     end
 end
 
--- Todo: pwang8. May 9. Should start to modify step()
+
 function CIUserSimEnv:step(adpAct)
     assert(adpAct >= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][1] and adpAct <= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][2])
 

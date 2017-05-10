@@ -8,12 +8,10 @@
 -- with lstm generated user action and score.
 --
 
+--- Attention: this file has been obsolete. It is not used anymore and not updated since May 10, 2017.
+
 require 'torch'
 require 'nn'
---require 'nnx'
---require 'optim'
---require 'rnn'
---local nninit = require 'nninit'
 local _ = require 'moses'
 local class = require 'classic'
 require 'classic.torch' -- Enables serialisation
@@ -21,7 +19,7 @@ local TableSet = require 'MyMisc.TableSetMisc'
 
 local CIUserBehaviorPredictor = classic.class('UserBehaviorPredictor')
 
-function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserScorePred, opt)
+function CIUserBehaviorPredictor:_init(CIUserSimulator, CIUserActsPred, CIUserScorePred, CIUserActScorePred, opt)
 
     self.userActsPred = torch.load(paths.concat(opt.ubgDir , opt.uapFile))
     self.userScorePred = torch.load(paths.concat(opt.ubgDir , opt.uspFile))

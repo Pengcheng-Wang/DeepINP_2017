@@ -5,6 +5,7 @@ local CIUserScorePredictor = require 'UserSimLearner/UserScorePredictor'
 local CIUserActScorePredictor = require 'UserSimLearner/UserActScorePredictor'
 local CIUserBehaviorGenerator = require 'UserSimLearner/UserBehaviorGenerator'
 local CIUserBehaviorGenEvaluator = require 'UserSimLearner/UserBehaviorGenEvaluator'
+local CIUserSimEnv = require 'UserSimLearner/CIUserSimEnv'
 
 opt = lapp[[
        --trType         (default "rl")           training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API) | ev (evaluation of act/score prediction)
@@ -62,66 +63,44 @@ elseif (opt.trType == 'ac' or opt.trType == 'sc') and opt.uSimShLayer == 1 then
     for i=1, 2e5 do
         CIUserActScorePred:trainOneEpoch()
     end
-elseif opt.trType == 'bg' then
-    local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
-    local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
-    local CIUserBehaviorGen = CIUserBehaviorGenerator(CIUserModel, CIUserActsPred, CIUserScorePred, opt)
-    local scoreStat = {0, 0}
-    local totalTrajLength = 0
-    local totalLengthEachType = {0, 0}
-    local rnds = 10000
-    for i=1, rnds do
-        local sc, tl
-        sc, tl = CIUserBehaviorGen:sampleOneTraj()
-        scoreStat[sc] = scoreStat[sc] + 1
-        totalTrajLength = totalTrajLength + tl
-        totalLengthEachType[sc] = totalLengthEachType[sc] + tl
-    end
-    print('Score dist:', scoreStat, 'Avg length:', totalTrajLength/rnds, 'Avg length of each nlg type 1:', totalLengthEachType[1]/scoreStat[1],
-        'Avg length of each nlg type 2:', totalLengthEachType[2]/scoreStat[2])
-    local numTrans = 0
-    for uid, urec in pairs(CIUserModel.realUserRLActs) do
-        numTrans = numTrans + #urec - 1
-    end
-    print('Number of transitions in data set is', numTrans)
 elseif opt.trType == 'rl' then
-    local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
-    local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
-    local CIUserBehaviorGen = CIUserBehaviorGenerator(CIUserModel, CIUserActsPred, CIUserScorePred, opt)
 
-    local numTrans = 0
-    local numTransType = {0, 0, 0, 0}
-    for uid, urec in pairs(CIUserModel.realUserRLActs) do
-        numTrans = numTrans + #urec - 1
-        for k,v in pairs(CIUserModel.realUserRLTypes[uid]) do
-            if v ~= 0 then
-                numTransType[v] = numTransType[v] + 1
-            end
-        end
-    end
-    print('Number of transitions in data set is', numTrans, 'type: ', numTransType)
+    local CIUserSimEnvModel = CIUserSimEnv(opt)
 
     local gens = 10000
     local adpTotLen = 0
     local adpLenType = {0, 0, 0, 0}
+    local totalTrajLength = 0
+    local scoreStat = {0, 0}
+    local totalLengthEachType = {0, 0}
     for i=1, gens do
         print('iter', i)
         local obv, score, term, adpType
         local adpCnt = 0
         term = false
-        obv, adpType = CIUserBehaviorGen:start()
+        obv, adpType = CIUserSimEnvModel:start()
         print('^### Outside in main\n state:', obv, '\n type:', adpType)
         while not term do
             adpLenType[adpType] = adpLenType[adpType] + 1
             adpCnt = adpCnt + 1
             local rndAdpAct = torch.random(fr.ciAdpActRanges[adpType][1], fr.ciAdpActRanges[adpType][2])
---            print('^--- Adaptation type', adpType, 'Random act choice: ', rndAdpAct)
-            score, obv, term, adpType = CIUserBehaviorGen:step(rndAdpAct)
---            print('^### Outside in main\n state:', obv, '\n type:', adpType, '\n score:', score, ',term:', term)
+            --            print('^--- Adaptation type', adpType, 'Random act choice: ', rndAdpAct)
+            score, obv, term, adpType = CIUserSimEnvModel:step(rndAdpAct)
+            --            print('^### Outside in main\n state:', obv, '\n type:', adpType, '\n score:', score, ',term:', term)
         end
         adpTotLen = adpTotLen + adpCnt
+        totalTrajLength = totalTrajLength + CIUserSimEnvModel.timeStepCnt
+        if score > 0 then
+            scoreStat[1] = scoreStat[1] + 1
+            totalLengthEachType[1] = totalLengthEachType[1] + CIUserSimEnvModel.timeStepCnt
+        else
+            scoreStat[2] = scoreStat[2] + 1
+            totalLengthEachType[2] = totalLengthEachType[2] + CIUserSimEnvModel.timeStepCnt
+        end
     end
-    print('In user behaviro generation in', gens, 'times, avg len:', adpTotLen/gens, 'Adp types:', adpLenType)
+    print('In user behaviro generation in', gens, 'times, avg adp appearances:', adpTotLen/gens, 'Adp types:', adpLenType)
+    print('Avg user action traj length: ', totalTrajLength/gens, ', Score dist: ', scoreStat, 'Avg user act length of type 1: ',
+        totalLengthEachType[1]/scoreStat[1], 'Avg user act length of type 2:', totalLengthEachType[2]/scoreStat[2])
 elseif opt.trType == 'ev' and opt.uSimShLayer < 1 then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
