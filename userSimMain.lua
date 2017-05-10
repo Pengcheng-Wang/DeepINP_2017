@@ -126,6 +126,9 @@ elseif opt.trType == 'ev' and opt.uSimShLayer < 1 then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     local CIUserBehaviorGen = CIUserBehaviorGenEvaluator(CIUserModel, CIUserActsPred, CIUserScorePred, nil, opt)
+elseif opt.trType == 'ev' and opt.uSimShLayer == 1 then
+    local CIUserActScorePred = CIUserActScorePredictor(CIUserModel, opt)
+    local CIUserBehaviorGen = CIUserBehaviorGenEvaluator(CIUserModel, nil, nil, CIUserActScorePred, opt)
 end
 
 

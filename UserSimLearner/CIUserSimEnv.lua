@@ -114,14 +114,14 @@ end
 
 
 --- This function calculates and sets self.curRnnUserAct (lstm), or self.curOneStepAct (non-lstm),
---  which is the predicted user action according to current tabRnnStatePrep value
+--  which is the predicted user action according to current tabRnnStatePrep or curOneStepStatePrep value
 function CIUserSimEnv:_calcUserAct()
     -- Pick an action using the action prediction model
     local nll_acts
 
-    if opt.uSimShLayer < 1 then
+    if self.opt.uSimShLayer < 1 then
         -- bipartite action, outcome (score) prediction models
-        if opt.uppModel == 'lstm' then
+        if self.opt.uppModel == 'lstm' then
             self.userActsPred:forget()
             nll_acts = self.userActsPred:forward(self.tabRnnStatePrep)[self.opt.lstmHist]:squeeze() -- get act choice output for last time step
         else
@@ -130,18 +130,18 @@ function CIUserSimEnv:_calcUserAct()
         end
     else
         -- unified action, outcome (score) prediction models
-        if opt.uppModel == 'lstm' then
+        if self.opt.uppModel == 'lstm' then
             self.userActScorePred:forget()
-            nll_acts = self.userActsPred:forward(self.tabRnnStatePrep)[self.opt.lstmHist][1]:squeeze() -- get act choice output for last time step
+            nll_acts = self.userActScorePred:forward(self.tabRnnStatePrep)[self.opt.lstmHist][1]:squeeze() -- get act choice output for last time step, act has index of 1
         else
             -- non-lstm models
-            nll_acts = self.userActsPred:forward(self.curOneStepStatePrep)
+            nll_acts = self.userActScorePred:forward(self.curOneStepStatePrep)
             -- Here, if moe is used with shared lower layers, it is the problem that,
             -- due to limitation of MixtureTable module, we have to join tables together as
             -- a single tensor as output of the whole user action and score prediction model.
             -- So, to guarantee the compatability, we need split the tensor into two tables here,
             -- for act prediction and score prediction respectively.
-            if opt.uppModel == 'moe' then
+            if self.opt.uppModel == 'moe' then
                 nll_acts = nll_acts:split(self.CIUSim.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
             end
             nll_acts = nll_acts[1]:squeeze()
@@ -216,7 +216,7 @@ function CIUserSimEnv:start()
 
     while not valid do
         --- randomly select one human user's record whose 1st action cannot be ending action
-        if opt.uppModel == 'lstm' then
+        if self.opt.uppModel == 'lstm' then
             repeat
                 self.rndStartInd = torch.random(1, self.realDataStartsCnt)
             until self.CIUap.rnnRealUserDataActs[self.CIUap.rnnRealUserDataStarts[self.rndStartInd]][self.opt.lstmHist] ~= self.CIUSim.CIFr.usrActInd_end
@@ -257,7 +257,7 @@ function CIUserSimEnv:start()
         self.timeStepCnt = 1
         self.tabRnnStatePrep = {}
 
-        if opt.uppModel == 'lstm' then
+        if self.opt.uppModel == 'lstm' then
             while not self.adpTriggered and self.curRnnUserAct ~= self.CIUSim.CIFr.usrActInd_end do
                 -- apply user's action onto raw state representation
                 -- This is the state representation for next single time step
@@ -303,7 +303,6 @@ function CIUserSimEnv:start()
             end -- end of while
         end
 
-
         self.rlStateRaw = torch.Tensor(1, 1, self.CIUSim.userStateFeatureCnt):fill(0)   -- this state should be 3d
         self.rlStatePrep = torch.Tensor(1, 1, self.CIUSim.userStateFeatureCnt):fill(0)   -- this state should be 3d
 
@@ -311,7 +310,7 @@ function CIUserSimEnv:start()
         if self.adpTriggered then
             --            print('--- Adp triggered')
 
-            if opt.uppModel == 'lstm' then
+            if self.opt.uppModel == 'lstm' then
                 self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
 
                 -- Need to add the user action's effect on rl state
@@ -348,7 +347,7 @@ end
 function CIUserSimEnv:step(adpAct)
     assert(adpAct >= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][1] and adpAct <= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][2])
 
-    if opt.uppModel == 'lstm' then
+    if self.opt.uppModel == 'lstm' then
 
         self.nextSingleStepStateRaw = self.tabRnnStateRaw[self.opt.lstmHist]:clone()
         self.CIUSim:applyAdpActOnState(self.nextSingleStepStateRaw, self.adpType, adpAct)
@@ -401,7 +400,7 @@ function CIUserSimEnv:step(adpAct)
     -- Attention: we guarantee that the ending user action will not trigger adaptation
     if self.adpTriggered then
         --        print('--- Adp triggered')
-        if opt.uppModel == 'lstm' then
+        if self.opt.uppModel == 'lstm' then
             self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
 
             -- Need to add the user action's effect on rl state
@@ -426,7 +425,7 @@ function CIUserSimEnv:step(adpAct)
 
     else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
 
-        if opt.uppModel == 'lstm' then
+        if self.opt.uppModel == 'lstm' then
             self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
         else
             -- non-lstm models
@@ -440,9 +439,9 @@ function CIUserSimEnv:step(adpAct)
         local nll_rewards
         local nll_rwd
 
-        if opt.uSimShLayer < 1 then
+        if self.opt.uSimShLayer < 1 then
             -- Bipartite actoin, outcome (score) prediction models
-            if opt.uppModel == 'lstm' then
+            if self.opt.uppModel == 'lstm' then
                 self:_updateRnnStatePrep()
                 self.userScorePred:forget()
                 nll_rewards = self.userScorePred:forward(self.tabRnnStatePrep)
@@ -454,24 +453,24 @@ function CIUserSimEnv:step(adpAct)
                 nll_rwd = nll_rewards:squeeze()
             end
         else
-            -- opt.uSimShLayer == 1
+            -- self.opt.uSimShLayer == 1
             -- Unified action, outcome (score) prediction models with shared layer structure
-            if opt.uppModel == 'lstm' then
+            if self.opt.uppModel == 'lstm' then
                 self:_updateRnnStatePrep()
                 self.userActScorePred:forget()
-                nll_rewards = self.userActsPred:forward(self.tabRnnStatePrep)[self.opt.lstmHist][2] -- get act choice output for last time step
+                nll_rewards = self.userActScorePred:forward(self.tabRnnStatePrep)[self.opt.lstmHist][2] -- get act choice output for last time step
                 nll_rwd = nll_rewards:squeeze()
             else
                 -- non-lstm models
                 self:_updateOneStepStatePrep()
                 -- non-lstm models
-                nll_rewards = self.userActsPred:forward(self.curOneStepStatePrep)
+                nll_rewards = self.userActScorePred:forward(self.curOneStepStatePrep)
                 -- Here, if moe is used with shared lower layers, it is the problem that,
                 -- due to limitation of MixtureTable module, we have to join tables together as
                 -- a single tensor as output of the whole user action and score prediction model.
                 -- So, to guarantee the compatability, we need split the tensor into two tables here,
                 -- for act prediction and score prediction respectively.
-                if opt.uppModel == 'moe' then
+                if self.opt.uppModel == 'moe' then
                     nll_rewards = nll_rewards:split(self.CIUSim.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
                 end
                 nll_rwd = nll_rewards[2]:squeeze()
