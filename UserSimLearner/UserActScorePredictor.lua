@@ -609,9 +609,9 @@ function CIUserActScorePredictor:trainOneEpoch()
     print('<trainer> saving ciunet to '..filename)
     torch.save(filename, self.model)
 
-    if self.trainEpoch % 20 == 0 then
-        filename = paths.concat(self.opt.save, string.format('%d', self.trainEpoch)..'_'..'_'..
-                string.format('%.2f', self.uapConfusion.totalValid*100)..string.format('%.2f', self.uspConfusion.totalValid*100)..'uasp.t7')
+    if self.trainEpoch % 5 == 0 then
+        filename = paths.concat(self.opt.save, string.format('%d', self.trainEpoch)..'_'..
+                string.format('%.2f', self.uapConfusion.totalValid*100)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'uasp.t7')
         os.execute('mkdir -p ' .. sys.dirname(filename))
         print('<trainer> saving periodly trained ciunet to '..filename)
         torch.save(filename, self.model)

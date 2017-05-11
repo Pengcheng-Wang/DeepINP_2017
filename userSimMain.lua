@@ -52,17 +52,17 @@ local CIUserModel = CIUserSimulator(fr, opt)
 
 if opt.trType == 'sc' and opt.uSimShLayer < 1 then
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
-    for i=1, 2e5 do
+    for i=1, 200 do
         CIUserScorePred:trainOneEpoch()
     end
 elseif opt.trType == 'ac' and opt.uSimShLayer < 1 then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
-    for i=1, 2e5 do
+    for i=1, 200 do
         CIUserActsPred:trainOneEpoch()
     end
 elseif (opt.trType == 'ac' or opt.trType == 'sc') and opt.uSimShLayer == 1 then
     local CIUserActScorePred = CIUserActScorePredictor(CIUserModel, opt)
-    for i=1, 2e5 do
+    for i=1, 200 do
         CIUserActScorePred:trainOneEpoch()
     end
 elseif opt.trType == 'rl' then
