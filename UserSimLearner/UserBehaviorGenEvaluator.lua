@@ -42,7 +42,8 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
         -- The user action/score predictors for evaluation should be pre-trained, and loaded from files
         -- Also, the CIUserSimulator, CIUserActsPred, CIUserScorePred should be initialized using
         -- the test set.
-        print('User Act Score Bipartitle model: #', paths.concat(opt.ubgDir , opt.uapFile))
+        print('User Act Score Bipartitle model: #', paths.concat(opt.ubgDir , opt.uapFile),
+            ', ', paths.concat(opt.ubgDir , opt.uspFile))
         self.userActsPred = torch.load(paths.concat(opt.ubgDir , opt.uapFile))
         self.userScorePred = torch.load(paths.concat(opt.ubgDir , opt.uspFile))
         self.userActsPred:evaluate()
