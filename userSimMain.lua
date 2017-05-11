@@ -37,6 +37,7 @@ opt = lapp[[
        --rwdSmpEps        (default 0)           User reward sampling threshold. If rand se than this value, reture 1st pred
        --uSimShLayer        (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
        --rlEvnIte        (default 10000)           No of iterations in rl type of evaluation
+       --usimTrIte        (default 3000)           No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
     ]]
 
 -- threads and default tensor type
@@ -53,17 +54,17 @@ local CIUserModel = CIUserSimulator(fr, opt)
 
 if opt.trType == 'sc' and opt.uSimShLayer < 1 then
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
-    for i=1, 3000 do
+    for i=1, opt.usimTrIte do
         CIUserScorePred:trainOneEpoch()
     end
 elseif opt.trType == 'ac' and opt.uSimShLayer < 1 then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
-    for i=1, 3000 do
+    for i=1, opt.usimTrIte do
         CIUserActsPred:trainOneEpoch()
     end
 elseif (opt.trType == 'ac' or opt.trType == 'sc') and opt.uSimShLayer == 1 then
     local CIUserActScorePred = CIUserActScorePredictor(CIUserModel, opt)
-    for i=1, 3000 do
+    for i=1, opt.usimTrIte do
         CIUserActScorePred:trainOneEpoch()
     end
 elseif opt.trType == 'rl' then

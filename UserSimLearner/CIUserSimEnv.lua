@@ -60,8 +60,13 @@ function CIUserSimEnv:_init(opt)
     self.curRnnStatesRaw = nil
     self.curRnnUserAct = nil
     if opt.uppModel == 'lstm' then
-        self.curRnnStatesRaw = self.CIUap.rnnRealUserDataStates[self.CIUap.rnnRealUserDataStarts[self.rndStartInd]]     -- sample the 1st state
-        self.curRnnUserAct = self.CIUap.rnnRealUserDataActs[self.CIUap.rnnRealUserDataStarts[self.rndStartInd]][self.opt.lstmHist] -- sample the 1st action (at last time step)
+        local CIUp_model = self.CIUap
+        if opt.uSimShLayer == 1 then
+            CIUp_model = self.CIUasp
+        end
+
+        self.curRnnStatesRaw = CIUp_model.rnnRealUserDataStates[CIUp_model.rnnRealUserDataStarts[self.rndStartInd]]     -- sample the 1st state
+        self.curRnnUserAct = CIUp_model.rnnRealUserDataActs[CIUp_model.rnnRealUserDataStarts[self.rndStartInd]][self.opt.lstmHist] -- sample the 1st action (at last time step)
     end
 
     self.curOneStepStateRaw = nil
@@ -222,15 +227,20 @@ function CIUserSimEnv:start()
     while not valid do
         --- randomly select one human user's record whose 1st action cannot be ending action
         if self.opt.uppModel == 'lstm' then
+            local CIUp_model = self.CIUap
+            if opt.uSimShLayer == 1 then
+                CIUp_model = self.CIUasp
+            end
+
             repeat
                 self.rndStartInd = torch.random(1, self.realDataStartsCnt)
-            until self.CIUap.rnnRealUserDataActs[self.CIUap.rnnRealUserDataStarts[self.rndStartInd]][self.opt.lstmHist] ~= self.CIUSim.CIFr.usrActInd_end
+            until CIUp_model.rnnRealUserDataActs[CIUp_model.rnnRealUserDataStarts[self.rndStartInd]][self.opt.lstmHist] ~= self.CIUSim.CIFr.usrActInd_end
 
             --- Get this user's state record at the 1st time stpe. This process means we sample
             --  user's 1st action and survey data from human user's records. Then we use our prediction
             --  model to estimate user's future ations.
-            self.curRnnStatesRaw = self.CIUap.rnnRealUserDataStates[self.CIUap.rnnRealUserDataStarts[self.rndStartInd]]     -- sample the 1st state
-            self.curRnnUserAct = self.CIUap.rnnRealUserDataActs[self.CIUap.rnnRealUserDataStarts[self.rndStartInd]][self.opt.lstmHist] -- sample the 1st action (at last time step)
+            self.curRnnStatesRaw = CIUp_model.rnnRealUserDataStates[CIUp_model.rnnRealUserDataStarts[self.rndStartInd]]     -- sample the 1st state
+            self.curRnnUserAct = CIUp_model.rnnRealUserDataActs[CIUp_model.rnnRealUserDataStarts[self.rndStartInd]][self.opt.lstmHist] -- sample the 1st action (at last time step)
 
             self.tabRnnStateRaw = {}   -- raw state value, used for updating future states according to current actions. This is state for user act/score prediction nn, not for rl
             for j=1, self.opt.lstmHist do
