@@ -228,7 +228,7 @@ function CIUserSimEnv:start()
         --- randomly select one human user's record whose 1st action cannot be ending action
         if self.opt.uppModel == 'lstm' then
             local CIUp_model = self.CIUap
-            if opt.uSimShLayer == 1 then
+            if self.opt.uSimShLayer == 1 then
                 CIUp_model = self.CIUasp
             end
 
