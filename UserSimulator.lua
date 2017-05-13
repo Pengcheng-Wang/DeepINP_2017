@@ -40,9 +40,23 @@ function CIUserSimulator:_init(CIFileReader, opt)
             end
             ite = ite + 1
         end
-    else
+    elseif self.opt.ciuTType == 'test' then
         for userId, userRcd in pairs(CIFileReader.traceData) do
             if ite % 5 ~= 2 then
+                CIFileReader.traceData[userId] = nil
+            end
+            ite = ite + 1
+        end
+    elseif self.opt.ciuTType == 'train_tr' then
+        for userId, userRcd in pairs(CIFileReader.traceData) do
+            if ite % 5 == 2 or ite % 5 == 3 then
+                CIFileReader.traceData[userId] = nil
+            end
+            ite = ite + 1
+        end
+    elseif self.opt.ciuTType == 'train_ev' then
+        for userId, userRcd in pairs(CIFileReader.traceData) do
+            if ite % 5 ~= 3 then
                 CIFileReader.traceData[userId] = nil
             end
             ite = ite + 1

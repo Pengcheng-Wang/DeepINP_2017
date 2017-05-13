@@ -24,7 +24,7 @@ opt = lapp[[
        -t,--threads       (default 4)           number of threads
        -g,--gpu        (default 0)          gpu device id, 0 for using cpu
        --prepro           (default "std")       input state feature preprocessing: rsc | std
-       --lstmHd           (default 64)          lstm hidden layer size
+       --lstmHd           (default 32)          lstm hidden layer size
        --lstmHist         (default 10)           lstm hist length. This influence the rnn tensor table construction in data preparation
        --uSimLstmBackLen         (default 3)           The maximum step applied in btpp in lstm
        --ubgDir           (default "ubgModel")  directory storing uap and usp models
@@ -37,7 +37,7 @@ opt = lapp[[
        --rwdSmpEps        (default 0)           User reward sampling threshold. If rand se than this value, reture 1st pred
        --uSimShLayer        (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
        --rlEvnIte        (default 10000)           No of iterations in rl type of evaluation
-       --usimTrIte        (default 3000)           No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
+       --usimTrIte        (default 1000)           No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
     ]]
 
 -- threads and default tensor type
