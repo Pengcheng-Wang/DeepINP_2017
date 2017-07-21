@@ -148,7 +148,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             -- lstm
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
-            local lstm = nn.FastLSTM{inputSize=self.inputFeatureNum, outputSize=opt.lstmHd, rho=opt.uSimLstmBackLen, p=opt.dropout} -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+            local lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropout) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
             lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
             lstm:remember('both')
             self.model:add(lstm)
