@@ -40,6 +40,8 @@ opt = lapp[[
        --usimTrIte        (default 1000)           No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
        --termActSmgLen     (default 50)           The length above which user termination action would be highly probably sampled. The observed avg length is about 40
        --termActSmgEps     (default 0.9)           The probability which user termination action would be sampled after certain length
+       --testSetDivSeed     (default 2)         The default seed value when separating a test set from the dataset
+       --validSetDivSeed    (default 3)         The default seed value when separating a validation set out from the training set
     ]]
 
 -- threads and default tensor type
