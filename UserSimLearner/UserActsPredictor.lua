@@ -49,8 +49,10 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             local numOfExp = 4
             for i = 1, numOfExp do
                 local expert = nn.Sequential()
+                if opt.dropout > 0 then expert:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
                 expert:add(nn.Linear(self.inputFeatureNum, 32))
                 expert:add(nn.ReLU())
+                if opt.dropout > 0 then expert:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
                 expert:add(nn.Linear(32, 24))
                 expert:add(nn.ReLU())
                 expert:add(nn.Linear(24, #classes))
@@ -59,6 +61,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             end
 
             gater = nn.Sequential()
+            if opt.dropout > 0 then gater:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             gater:add(nn.Linear(self.inputFeatureNum, 24))
             gater:add(nn.Tanh())
             gater:add(nn.Linear(24, numOfExp))
@@ -77,8 +80,10 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             -- regular 2-layer MLP
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
+            if opt.dropout > 0 then self.model:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             self.model:add(nn.Linear(self.inputFeatureNum, 32))
             self.model:add(nn.ReLU())
+            if opt.dropout > 0 then self.model:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             self.model:add(nn.Linear(32, 24))
             self.model:add(nn.ReLU())
             self.model:add(nn.Linear(24, #classes))
@@ -99,7 +104,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             -- lstm
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
-            local lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+            local lstm = nn.FastLSTM{inputSize=self.inputFeatureNum, outputSize=opt.lstmHd, rho=opt.uSimLstmBackLen, p=opt.dropout} -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
             lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
             lstm:remember('both')
             self.model:add(lstm)
