@@ -13,10 +13,10 @@ local TableSet = require 'MyMisc.TableSetMisc'
 local CIUserSimulator = classic.class('UserSimulator')
 
 function CIUserSimulator:_init(CIFileReader, opt)
+    self.CIFr = CIFileReader    -- a ref to the file reader
     self.realUserDataStates = {}
     self.realUserDataActs = {}
     self.realUserDataRewards = {}
-    self.CIFr = CIFileReader    -- a ref to the file reader
     self.realUserDataStartLines = {}    -- this table stores the starting line of each real human user's interation
     self.realUserDataEndLines = {}
 
