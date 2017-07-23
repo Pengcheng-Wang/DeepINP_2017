@@ -20,6 +20,15 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.realUserDataStartLines = {}    -- this table stores the starting line of each real human user's interation
     self.realUserDataEndLines = {}
 
+    -- Data structures for the test/train_validation set
+    -- This is only used during training, for calculating performance (pred accu) at each epoch
+    self.fileReaderTraceDataTest = {}   -- This is the equvalence of CIFileReader, for the test/train_validation set
+    self.realUserDataStatesTest = {}
+    self.realUserDataActsTest = {}
+    self.realUserDataRewardsTest = {}
+    self.realUserDataStartLinesTest = {}    -- this table stores the starting line of each real human user's interation
+    self.realUserDataEndLinesTest = {}
+
     -- The following tables are used by rl evaluations
     self.realUserRLStates = {}
     self.realUserRLStatePrepInd = {}
@@ -36,6 +45,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     if self.opt.ciuTType == 'train' then
         for userId, userRcd in pairs(CIFileReader.traceData) do
             if ite % 5 == opt.testSetDivSeed then
+                self.fileReaderTraceDataTest[userId] = CIFileReader.traceData[userId]   -- save refs in test set
                 CIFileReader.traceData[userId] = nil
             end
             ite = ite + 1
@@ -49,7 +59,10 @@ function CIUserSimulator:_init(CIFileReader, opt)
         end
     elseif self.opt.ciuTType == 'train_tr' then
         for userId, userRcd in pairs(CIFileReader.traceData) do
-            if ite % 5 == opt.testSetDivSeed or ite % 5 == opt.validSetDivSeed then
+            if ite % 5 == opt.testSetDivSeed then
+                CIFileReader.traceData[userId] = nil
+            elseif ite % 5 == opt.validSetDivSeed then
+                self.fileReaderTraceDataTest[userId] = CIFileReader.traceData[userId]   -- save refs in train_validation set
                 CIFileReader.traceData[userId] = nil
             end
             ite = ite + 1
@@ -77,6 +90,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     -- The total 402 records corpus has 200 above median nlg records, and 202 equal or below media records.
     -- Using the above splitting method, there are 161 pos, 160 neg in training set, and 39 pos, 42 neg in test set.
 
+    -- The following data processing is on training set
     for userId, userRcd in pairs(CIFileReader.traceData) do
 
         -- set up initial user state before taking actions
@@ -240,6 +254,90 @@ function CIUserSimulator:_init(CIFileReader, opt)
     end
     self.realUserDataEndLines[#self.realUserDataStartLines] = #self.realUserDataStates
 
+
+    if self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr' then
+        -- The following data processing is on test/train_validation set
+        for userId, userRcd in pairs(self.fileReaderTraceDataTest) do
+
+            -- set up initial user state before taking actions
+            self.realUserDataStatesTest[#self.realUserDataStatesTest + 1] = torch.Tensor(self.userStateFeatureCnt):fill(0)
+            self.realUserDataStartLinesTest[#self.realUserDataStartLinesTest + 1] = #self.realUserDataStatesTest -- Stores start lines for each user interaction (in test set)
+            for i=1, CIFileReader.userStateSurveyFeatureCnt do
+                -- set up survey features, which are behind game play features in the state feature tensor
+                self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.userStateGamePlayFeatureCnt+i] = CIFileReader.surveyData[userId][i]
+            end
+
+            for time, act in ipairs(userRcd) do
+                self.realUserDataActsTest[#self.realUserDataStatesTest] = act
+
+                if CIFileReader.surveyData[userId][CIFileReader.userStateSurveyFeatureCnt+1] > 0.16666667 then  -- above median nlg
+                    self.realUserDataRewardsTest[#self.realUserDataStatesTest] = 1  -- pos nlg: class_1, neg or 0 nlg: class_2
+                else
+                    self.realUserDataRewardsTest[#self.realUserDataStatesTest] = 2     -- This is (binary) reward class label, not reward value
+                end
+
+                if act ~= CIFileReader.usrActInd_end then
+                    -- set the next time step state set
+                    self.realUserDataStatesTest[#self.realUserDataStatesTest + 1] = self.realUserDataStatesTest[#self.realUserDataStatesTest]:clone()
+
+                    if act == CIFileReader.usrActInd_askTeresaSymp then
+                        self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrStateFeatureInd_TeresaSymp] =
+                        (4 - CIFileReader.AdpTeresaSymptomAct[userId][time]) / 3.0  -- (act1--1.0, act3--0.33). So y=(4-x)/3
+
+                    elseif act == CIFileReader.usrActInd_askBryceSymp then
+                        self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrStateFeatureInd_BryceSymp] =
+                        (3 - CIFileReader.AdpBryceSymptomAct[userId][time]) / 2.0  -- (act1--1.0, act2--0.5). So y=(3-x)/2
+
+                    elseif act == CIFileReader.usrActInd_talkQuentin and
+                            self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrActInd_KimLetQuentinRevealActOne] < 1 and
+                            self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrActInd_talkQuentin] < 1 then
+                        self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrStateFeatureInd_PresentQuiz] =
+                        (2 - CIFileReader.AdpPresentQuizAct[userId][time])  -- act1-quiz-1.0, act2-no_quiz-0. y=2-x
+
+                    elseif act == CIFileReader.usrActInd_talkRobert and
+                            self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrActInd_talkRobert] < 1 then
+                        self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrStateFeatureInd_PresentQuiz] =
+                        (2 - CIFileReader.AdpPresentQuizAct[userId][time])  -- act1-quiz-1.0, act2-no_quiz-0. y=2-x
+
+                    elseif act == CIFileReader.usrActInd_talkFord and
+                            self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrActInd_talkFord] < 1 then
+                        self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrStateFeatureInd_PresentQuiz] =
+                        (2 - CIFileReader.AdpPresentQuizAct[userId][time])  -- act1-quiz-1.0, act2-no_quiz-0. y=2-x
+
+                    elseif act == CIFileReader.usrActInd_submitWorksheet then
+                        self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrStateFeatureInd_WorksheetLevel] =
+                        (CIFileReader.AdpWorksheetLevelAct[userId][time] / 3.0)  -- act1-0.33, act3-1. y=x/3
+
+                    end
+
+                    -- Add 1 to corresponding state features
+                    self.realUserDataStatesTest[#self.realUserDataStatesTest][act] = self.realUserDataStatesTest[#self.realUserDataStatesTest][act] + 1
+
+                    -- For indices 12, 13, 14, state feature values can only be 0 or 1
+                    if self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrActInd_BryceRevealActOne] > 1 then
+                        self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrActInd_BryceRevealActOne] = 1
+                    end
+                    if self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrActInd_QuentinRevealActOne] > 1 then
+                        self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrActInd_QuentinRevealActOne] = 1
+                    end
+                    if self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrActInd_KimLetQuentinRevealActOne] > 1 then
+                        self.realUserDataStatesTest[#self.realUserDataStatesTest][CIFileReader.usrActInd_KimLetQuentinRevealActOne] = 1
+                    end
+
+                end
+
+            end
+
+        end
+        print('Human user actions number in test set: ', #self.realUserDataStatesTest, #self.realUserDataActsTest)
+
+        for i=1, #self.realUserDataStartLinesTest - 1 do
+            self.realUserDataEndLinesTest[i] = self.realUserDataStartLinesTest[i+1] - 1
+        end
+        self.realUserDataEndLinesTest[#self.realUserDataStartLinesTest] = #self.realUserDataStatesTest
+    end
+
+
     self.stateFeatureRescaleFactor = torch.Tensor(self.userStateFeatureCnt):fill(1)
     self.stateFeatureMeanEachFeature = torch.Tensor(self.userStateFeatureCnt):fill(0)
     self.stateFeatureStdEachFeature = torch.Tensor(self.userStateFeatureCnt):fill(1)
@@ -247,6 +345,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self:_calcRealUserStateFeatureRescaleFactor()
 
 
+    -- These RL format data are used in RL agent training directly using raw data
     for uid, uRLStates in pairs(self.realUserRLStates) do
         self.realUserRLStatePrepInd[uid] = {}
         for k, v in pairs(uRLStates) do

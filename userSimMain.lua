@@ -37,7 +37,7 @@ opt = lapp[[
        --rwdSmpEps        (default 0)           User reward sampling threshold. If rand se than this value, reture 1st pred
        --uSimShLayer        (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
        --rlEvnIte        (default 10000)           No of iterations in rl type of evaluation
-       --usimTrIte        (default 1000)           No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
+       --usimTrIte        (default 400)           No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
        --termActSmgLen     (default 50)           The length above which user termination action would be highly probably sampled. The observed avg length is about 40
        --termActSmgEps     (default 0.9)           The probability which user termination action would be sampled after certain length
        --testSetDivSeed     (default 2)         The default seed value when separating a test set from the dataset
