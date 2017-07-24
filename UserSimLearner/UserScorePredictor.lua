@@ -176,7 +176,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     end
 
     ----------------------------------------------------------------------
-    --- Prepare data for lstm
+    --- Prepare data for lstm in training set
     ---
     self.rnnRealUserDataStates = {}
     self.rnnRealUserDataRewards = {}
@@ -229,6 +229,64 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
         end
         self.rnnRealUserDataEnds[#self.rnnRealUserDataEnds+1] = #self.rnnRealUserDataStates     -- Set the end of the last user's record
         -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
+    end
+
+    ----------------------------------------------------------------------
+    --- Prepare data for lstm in test/train_validation set
+    ---
+    self.rnnRealUserDataStatesTest = {}
+    self.rnnRealUserDataRewardsTest = {}
+    self.rnnRealUserDataStartsTest = {}
+    self.rnnRealUserDataEndsTest = {}
+    self.rnnRealUserDataPadTest = torch.Tensor(#self.ciUserSimulator.realUserDataStartLinesTest):fill(0)    -- indicating whether data has padding at head (should be padded)
+    if self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr' then
+        if opt.uppModel == 'lstm' then
+            local indSeqHead = 1
+            local indSeqTail = opt.lstmHist
+            local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
+            while indSeqTail <= #self.ciUserSimulator.realUserDataStatesTest do
+                if self.rnnRealUserDataPadTest[indUserSeq] < 1 then
+                    for padi = opt.lstmHist-1, 1, -1 do
+                        self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest + 1] = {}
+                        self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest + 1] = {}
+                        for i=1, padi do
+                            self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i] = torch.Tensor(self.ciUserSimulator.userStateFeatureCnt):fill(0) -- fill in all 0s states as dumb states
+                            self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i] = self.ciUserSimulator.realUserDataRewardsTest[indSeqHead]  -- duplicate the 1st user action for padded states
+                        end
+                        for i=1, opt.lstmHist-padi do
+                            self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i+padi] = self.ciUserSimulator.realUserDataStatesTest[indSeqHead+i-1]
+                            self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i+padi] = self.ciUserSimulator.realUserDataRewardsTest[indSeqHead+i-1]
+                        end
+                        if padi == opt.lstmHist-1 then
+                            self.rnnRealUserDataStartsTest[#self.rnnRealUserDataStartsTest+1] = #self.rnnRealUserDataStatesTest     -- This is the start of a user's record
+                        end
+                        if indSeqHead+(opt.lstmHist-padi)-1 == self.ciUserSimulator.realUserDataEndLinesTest[indUserSeq] then
+                            self.rnnRealUserDataPadTest[indUserSeq] = 1
+                            break   -- if padding tail is going to outrange this user record's tail, break
+                        end
+                    end
+                    self.rnnRealUserDataPadTest[indUserSeq] = 1
+                else
+                    if indSeqTail <= self.ciUserSimulator.realUserDataEndLinesTest[indUserSeq] then
+                        self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest + 1] = {}
+                        self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest + 1] = {}
+                        for i=1, opt.lstmHist do
+                            self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i] = self.ciUserSimulator.realUserDataStatesTest[indSeqHead+i-1]
+                            self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i] = self.ciUserSimulator.realUserDataRewardsTest[indSeqHead+i-1]
+                        end
+                        indSeqHead = indSeqHead + 1
+                        indSeqTail = indSeqTail + 1
+                    else
+                        self.rnnRealUserDataEndsTest[#self.rnnRealUserDataEndsTest+1] = #self.rnnRealUserDataStatesTest     -- This is the end of a user's record
+                        indUserSeq = indUserSeq + 1 -- next user's records
+                        indSeqHead = self.ciUserSimulator.realUserDataStartLinesTest[indUserSeq]
+                        indSeqTail = indSeqHead + opt.lstmHist - 1
+                    end
+                end
+            end
+            self.rnnRealUserDataEndsTest[#self.rnnRealUserDataEndsTest+1] = #self.rnnRealUserDataStatesTest     -- Set the end of the last user's record
+            -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
+        end
     end
 
     -- retrieve parameters and gradients
@@ -494,7 +552,7 @@ function CIUserScorePredictor:trainOneEpoch()
 --        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
 --    end
 
-    if self.trainEpoch % 20 == 0 then
+    if self.trainEpoch % 10 == 0 then
         filename = paths.concat(self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'usp.t7')
         os.execute('mkdir -p ' .. sys.dirname(filename))
         print('<trainer> saving periodly trained ciunet to '..filename)
@@ -504,11 +562,71 @@ function CIUserScorePredictor:trainOneEpoch()
         torch.save(filename, self.model)
     end
 
+    local scoreTestAccu = self:testScorePredOnTest()
+    print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', scoreTestAccu))
+    self.uspTestLogger:add{['<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '] = scoreTestAccu}
+
     self.uspConfusion:zero()
     -- next epoch
     self.trainEpoch = self.trainEpoch + 1
 end
 
+-- evaluation function on test/train_validation set
+function CIUserScorePredictor:testScorePredOnTest()
+    local crcRewCnt = 0
+
+    if opt.uppModel == 'lstm' then
+        -- uSimShLayer == 0 and lstm model
+
+        self.model:evaluate()
+        self.model:forget()
+
+        for i=1, #self.rnnRealUserDataStatesTest do
+            local userState = self.rnnRealUserDataStatesTest[i]
+            local userAct = self.rnnRealUserDataActsTest[i]
+            local userRew = self.rnnRealUserDataRewardsTest[i]
+
+            local tabState = {}
+            for j=1, self.opt.lstmHist do
+                local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
+                prepUserState[1] = self.ciUserSimulator:preprocessUserStateData(userState[j], self.opt.prepro)
+                tabState[j] = prepUserState:clone()
+            end
+
+            if userAct[self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
+                local nll_rewards = self.model:forward(tabState)
+                local lp, rin = torch.max(nll_rewards[self.opt.lstmHist]:squeeze(), 1)
+                if rin[1] == userRew[self.opt.lstmHist] then
+                    crcRewCnt = crcRewCnt + 1
+                end
+            end
+
+            self.model:forget()
+        end
+    else
+        -- uSimShLayer == 0 and not lstm models
+        self.model:evaluate()
+        for i=1, #self.ciUserSimulator.realUserDataStatesTest do
+            local userState = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStatesTest[i], self.opt.prepro)
+            local userAct = self.ciUserSimulator.realUserDataActsTest[i]
+            local userRew = self.ciUserSimulator.realUserDataRewardsTest[i]
+
+            local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
+            prepUserState[1] = userState:clone()
+
+            if userAct == self.ciUserSimulator.CIFr.usrActInd_end then
+                local nll_rewards = self.model:forward(prepUserState)
+                local lp, rin = torch.max(nll_rewards[1]:squeeze(), 1)
+                if rin[1] == userRew then
+                    crcRewCnt = crcRewCnt + 1
+                end
+            end
+
+        end
+    end
+
+    return crcRewCnt/#self.rnnRealUserDataEndsTest
+end
 
 return CIUserScorePredictor
 
