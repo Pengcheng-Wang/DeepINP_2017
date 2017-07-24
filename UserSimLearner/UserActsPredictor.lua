@@ -49,21 +49,21 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             local numOfExp = 4
             for i = 1, numOfExp do
                 local expert = nn.Sequential()
-                if opt.dropout > 0 then expert:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
                 expert:add(nn.Linear(self.inputFeatureNum, 32))
                 expert:add(nn.ReLU())
                 if opt.dropout > 0 then expert:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
                 expert:add(nn.Linear(32, 24))
                 expert:add(nn.ReLU())
+                if opt.dropout > 0 then expert:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
                 expert:add(nn.Linear(24, #classes))
                 expert:add(nn.LogSoftMax())
                 experts:add(expert)
             end
 
             gater = nn.Sequential()
-            if opt.dropout > 0 then gater:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             gater:add(nn.Linear(self.inputFeatureNum, 24))
             gater:add(nn.Tanh())
+            if opt.dropout > 0 then gater:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             gater:add(nn.Linear(24, numOfExp))
             gater:add(nn.SoftMax())
 
@@ -80,12 +80,12 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             -- regular 2-layer MLP
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
-            if opt.dropout > 0 then self.model:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             self.model:add(nn.Linear(self.inputFeatureNum, 32))
             self.model:add(nn.ReLU())
             if opt.dropout > 0 then self.model:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             self.model:add(nn.Linear(32, 24))
             self.model:add(nn.ReLU())
+            if opt.dropout > 0 then self.model:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             self.model:add(nn.Linear(24, #classes))
             self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
@@ -551,9 +551,11 @@ function CIUserActsPredictor:trainOneEpoch()
         torch.save(filename, self.model)
     end
 
-    local testAccu = self:testActPredOnTest()
-    print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', testAccu))
-    self.uapTestLogger:add{['<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '] = testAccu}
+    if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
+        local testAccu = self:testActPredOnTestDetOneEpoch()
+        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', testAccu))
+        self.uapTestLogger:add{['<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '] = testAccu }
+    end
 
     self.uapConfusion:zero()
     -- next epoch
@@ -561,7 +563,7 @@ function CIUserActsPredictor:trainOneEpoch()
 end
 
 -- evaluation function on test/train_validation set
-function CIUserActsPredictor:testActPredOnTest()
+function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
     -- Confusion matrix for action prediction (15 class)
 --    local actPredTP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
 --    local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)

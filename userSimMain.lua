@@ -42,7 +42,8 @@ opt = lapp[[
        --termActSmgEps     (default 0.9)           The probability which user termination action would be sampled after certain length
        --testSetDivSeed     (default 2)         The default seed value when separating a test set from the dataset
        --validSetDivSeed    (default 3)         The default seed value when separating a validation set out from the training set
-       --dropoutUSim        (default 0.25)       The dropout rate used in user simulation model building. Set 0 to turn off droput
+       --dropoutUSim        (default 0.2)       The dropout rate used in user simulation model building. Set 0 to turn off droput
+       --testOnTestFreq     (default 1)         The frequency of testing user simulation model's performance on test/train_valid set
     ]]
 
 -- threads and default tensor type

@@ -50,21 +50,21 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             local numOfExp = 4
             for i = 1, numOfExp do
                 local expert = nn.Sequential()
-                if opt.dropout > 0 then expert:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
                 expert:add(nn.Linear(self.inputFeatureNum, 32))
                 expert:add(nn.ReLU())
                 if opt.dropout > 0 then expert:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
                 expert:add(nn.Linear(32, 24))
                 expert:add(nn.ReLU())
+                if opt.dropout > 0 then expert:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
                 expert:add(nn.Linear(24, #self.classes))
                 expert:add(nn.LogSoftMax())
                 experts:add(expert)
             end
 
             gater = nn.Sequential()
-            if opt.dropout > 0 then gater:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             gater:add(nn.Linear(self.inputFeatureNum, 24))
             gater:add(nn.Tanh())
+            if opt.dropout > 0 then gater:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             gater:add(nn.Linear(24, numOfExp))
             gater:add(nn.SoftMax())
 
@@ -81,12 +81,12 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             -- regular 2-layer MLP
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
-            if opt.dropout > 0 then self.model:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             self.model:add(nn.Linear(self.inputFeatureNum, 32))
             self.model:add(nn.ReLU())
             if opt.dropout > 0 then self.model:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             self.model:add(nn.Linear(32, 24))
             self.model:add(nn.ReLU())
+            if opt.dropout > 0 then self.model:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
             self.model:add(nn.Linear(24, #self.classes))
             self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
@@ -562,9 +562,11 @@ function CIUserScorePredictor:trainOneEpoch()
         torch.save(filename, self.model)
     end
 
-    local scoreTestAccu = self:testScorePredOnTest()
-    print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', scoreTestAccu))
-    self.uspTestLogger:add{['<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '] = scoreTestAccu}
+    if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
+        local scoreTestAccu = self:testScorePredOnTestDetOneEpoch()
+        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', scoreTestAccu))
+        self.uspTestLogger:add{['<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '] = scoreTestAccu }
+    end
 
     self.uspConfusion:zero()
     -- next epoch
@@ -572,15 +574,13 @@ function CIUserScorePredictor:trainOneEpoch()
 end
 
 -- evaluation function on test/train_validation set
-function CIUserScorePredictor:testScorePredOnTest()
+function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
     local crcRewCnt = 0
 
     if opt.uppModel == 'lstm' then
         -- uSimShLayer == 0 and lstm model
-
         self.model:evaluate()
         self.model:forget()
-
         for i=1, #self.rnnRealUserDataStatesTest do
             local userState = self.rnnRealUserDataStatesTest[i]
             local userAct = self.rnnRealUserDataActsTest[i]
@@ -592,7 +592,6 @@ function CIUserScorePredictor:testScorePredOnTest()
                 prepUserState[1] = self.ciUserSimulator:preprocessUserStateData(userState[j], self.opt.prepro)
                 tabState[j] = prepUserState:clone()
             end
-
             if userAct[self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
                 local nll_rewards = self.model:forward(tabState)
                 local lp, rin = torch.max(nll_rewards[self.opt.lstmHist]:squeeze(), 1)
@@ -600,9 +599,10 @@ function CIUserScorePredictor:testScorePredOnTest()
                     crcRewCnt = crcRewCnt + 1
                 end
             end
-
             self.model:forget()
         end
+
+        return crcRewCnt/#self.rnnRealUserDataEndsTest
     else
         -- uSimShLayer == 0 and not lstm models
         self.model:evaluate()
@@ -621,11 +621,10 @@ function CIUserScorePredictor:testScorePredOnTest()
                     crcRewCnt = crcRewCnt + 1
                 end
             end
-
         end
-    end
 
-    return crcRewCnt/#self.rnnRealUserDataEndsTest
+        return crcRewCnt/#self.ciUserSimulator.realUserDataEndLinesTest
+    end
 end
 
 return CIUserScorePredictor
