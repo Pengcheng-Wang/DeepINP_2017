@@ -54,10 +54,10 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 local expert = nn.Sequential()
                 expert:add(nn.Linear(self.inputFeatureNum, 32))
                 expert:add(nn.ReLU())
-                if opt.dropout > 0 then expert:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
+                if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
                 expert:add(nn.Linear(32, 24))
                 expert:add(nn.ReLU())
-                if opt.dropout > 0 then expert:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
+                if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
 
                 -- The following code creates two output modules, with one module matches
                 -- to user action prediction, and the other matches to user outcome(score) prediction
@@ -79,7 +79,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             gater = nn.Sequential()
             gater:add(nn.Linear(self.inputFeatureNum, 24))
             gater:add(nn.Tanh())
-            if opt.dropout > 0 then gater:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
+            if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
             gater:add(nn.Linear(24, numOfExp))
             gater:add(nn.SoftMax())
 
@@ -98,10 +98,10 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             self.model:add(nn.Reshape(self.inputFeatureNum))
             self.model:add(nn.Linear(self.inputFeatureNum, 32))
             self.model:add(nn.ReLU())
-            if opt.dropout > 0 then self.model:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
+            if opt.dropoutUSim > 0 then self.model:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
             self.model:add(nn.Linear(32, 24))
             self.model:add(nn.ReLU())
-            if opt.dropout > 0 then self.model:add(nn.Dropout(opt.dropout)) end -- apply dropout, if any
+            if opt.dropoutUSim > 0 then self.model:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
 
             -- The following code creates two output modules, with one module matches
             -- to user action prediction, and the other matches to user outcome(score) prediction
@@ -148,7 +148,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             -- lstm
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
-            local lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropout) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+            local lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
             lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
             lstm:remember('both')
             self.model:add(lstm)
