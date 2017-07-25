@@ -148,6 +148,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     -- log results to files
     self.uapTrainLogger = optim.Logger(paths.concat(opt.save, 'train.log'))
     self.uapTestLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
+    self.uapTestLogger:setNames{'Epoch', 'Act Test acc.'}
 
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
@@ -553,8 +554,8 @@ function CIUserActsPredictor:trainOneEpoch()
 
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
         local testAccu = self:testActPredOnTestDetOneEpoch()
-        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', testAccu))
-        self.uapTestLogger:add{['<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '] = testAccu }
+        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', testAccu*100))
+        self.uapTestLogger:add{self.trainEpoch, testAccu*100 }
     end
 
     self.uapConfusion:zero()

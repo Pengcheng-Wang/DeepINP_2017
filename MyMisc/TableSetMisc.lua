@@ -27,4 +27,13 @@ function TableSetMisc.static.countsInSet(set)
     return cnt
 end
 
+function TableSetMisc.static.tableContainsValue(tab, element)
+    for _, value in pairs(tab) do
+        if value == element then
+            return true
+        end
+    end
+    return false
+end
+
 return TableSetMisc

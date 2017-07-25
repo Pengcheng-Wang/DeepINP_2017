@@ -151,6 +151,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     -- log results to files
     self.uspTrainLogger = optim.Logger(paths.concat(opt.save, 'train.log'))
     self.uspTestLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
+    self.uspTestLogger:setNames{'Epoch', 'Score Test acc.'}
 
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
@@ -382,7 +383,7 @@ function CIUserScorePredictor:trainOneEpoch()
                     targets[j][k] = target
                     if j == self.opt.lstmHist then
                         for dis=0, self.opt.scorePredStateScope-1 do
-                            if (i+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[i+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
+                            if (i+dis) <= #self.rnnRealUserDataStates and TableSet.tableContainsValue(self.rnnRealUserDataEnds, i+dis) then
                                 -- If current state is close enough to the end of this sequence, mark it.
                                 -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
                                 closeToEnd[k] = 1
@@ -406,7 +407,7 @@ function CIUserScorePredictor:trainOneEpoch()
                         targets[j][k] = target
                         if j == self.opt.lstmHist then
                             for dis=0, self.opt.scorePredStateScope-1 do
-                                if (randInd+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[randInd+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
+                                if (randInd+dis) <= #self.rnnRealUserDataStates and TableSet.tableContainsValue(self.rnnRealUserDataEnds, randInd+dis) then
                                     -- If current state is close enough to the end of this sequence, mark it.
                                     -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
                                     closeToEnd[k] = 1
@@ -615,8 +616,8 @@ function CIUserScorePredictor:trainOneEpoch()
 
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
         local scoreTestAccu = self:testScorePredOnTestDetOneEpoch()
-        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', scoreTestAccu))
-        self.uspTestLogger:add{['<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '] = scoreTestAccu }
+        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', scoreTestAccu*100))
+        self.uspTestLogger:add{self.trainEpoch, scoreTestAccu*100}
     end
 
     self.uspConfusion:zero()
