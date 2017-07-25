@@ -305,6 +305,7 @@ function CIUserScorePredictor:trainOneEpoch()
     print("<trainer> online epoch # " .. self.trainEpoch .. ' [batchSize = ' .. self.opt.batchSize .. ']')
     local inputs
     local targets
+    local closeToEnd
     local t = 1
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
     local epochDone = false
@@ -313,6 +314,7 @@ function CIUserScorePredictor:trainOneEpoch()
             -- create mini batch
             inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
             targets = torch.Tensor(self.opt.batchSize)
+            closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k = 1
             for i = t, math.min(t+self.opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
                 -- load new sample
@@ -322,6 +324,14 @@ function CIUserScorePredictor:trainOneEpoch()
                 local target = self.ciUserSimulator.realUserDataRewards[i]
                 inputs[k] = input
                 targets[k] = target
+                for dis=0, self.opt.scorePredStateScope-1 do
+                    if (i+dis) <= #self.ciUserSimulator.realUserDataActs and self.ciUserSimulator.realUserDataActs[i+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
+                        -- If current state is close enough to the end of this sequence, mark it.
+                        -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
+                        closeToEnd[k] = 1
+                        break
+                    end
+                end
                 k = k + 1
             end
 
@@ -331,6 +341,14 @@ function CIUserScorePredictor:trainOneEpoch()
                     local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
                     inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], self.opt.prepro)
                     targets[k] = self.ciUserSimulator.realUserDataRewards[randInd]
+                    for dis=0, self.opt.scorePredStateScope-1 do
+                        if (randInd+dis) <= #self.ciUserSimulator.realUserDataActs and self.ciUserSimulator.realUserDataActs[randInd+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
+                            -- If current state is close enough to the end of this sequence, mark it.
+                            -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
+                            closeToEnd[k] = 1
+                            break
+                        end
+                    end
                     k = k + 1
                 end
             end
@@ -343,12 +361,14 @@ function CIUserScorePredictor:trainOneEpoch()
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
                 targets = targets:cuda()
+                closeToEnd = closeToEnd:cuda()
             end
 
         else
             -- lstm
             inputs = {}
             targets = {}
+            closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k
             for j = 1, self.opt.lstmHist do
                 inputs[j] = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
@@ -360,6 +380,16 @@ function CIUserScorePredictor:trainOneEpoch()
                     local target = self.rnnRealUserDataRewards[i][j]
                     inputs[j][k] = input
                     targets[j][k] = target
+                    if j == self.opt.lstmHist then
+                        for dis=0, self.opt.scorePredStateScope-1 do
+                            if (i+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[i+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
+                                -- If current state is close enough to the end of this sequence, mark it.
+                                -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
+                                closeToEnd[k] = 1
+                                break
+                            end
+                        end
+                    end
                     k = k + 1
                 end
             end
@@ -374,6 +404,16 @@ function CIUserScorePredictor:trainOneEpoch()
                         local target = self.rnnRealUserDataRewards[randInd][j]
                         inputs[j][k] = input
                         targets[j][k] = target
+                        if j == self.opt.lstmHist then
+                            for dis=0, self.opt.scorePredStateScope-1 do
+                                if (randInd+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[randInd+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
+                                    -- If current state is close enough to the end of this sequence, mark it.
+                                    -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
+                                    closeToEnd[k] = 1
+                                    break
+                                end
+                            end
+                        end
                     end
                     k = k + 1
                 end
@@ -391,6 +431,7 @@ function CIUserScorePredictor:trainOneEpoch()
                 for _,v in pairs(targets) do
                     v = v:cuda()
                 end
+                closeToEnd = closeToEnd:cuda()
             end
 
         end
@@ -410,6 +451,16 @@ function CIUserScorePredictor:trainOneEpoch()
 
             -- evaluate function for complete mini batch
             local outputs = self.model:forward(inputs)
+            -- Zero error values (change output to target) for score prediction cases far away from ending state (I don't hope these cases influence training)
+            for cl=1, closeToEnd:size(1) do
+                if closeToEnd[cl] < 1 then
+                    if self.opt.uppModel == 'lstm' then
+                        outputs[self.opt.lstmHist][cl] = targets[self.opt.lstmHist][cl]
+                    else
+                        outputs[cl] = targets[cl]
+                    end
+                end
+            end
             local f = self.uspCriterion:forward(outputs, targets)
             local df_do = self.uspCriterion:backward(outputs, targets)
 

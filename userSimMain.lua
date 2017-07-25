@@ -44,6 +44,7 @@ opt = lapp[[
        --validSetDivSeed    (default 3)         The default seed value when separating a validation set out from the training set
        --dropoutUSim        (default 0.2)       The dropout rate used in user simulation model building. Set 0 to turn off droput
        --testOnTestFreq     (default 1)         The frequency of testing user simulation model's performance on test/train_valid set
+       --scorePredStateScope     (default 10)        The range of distance of a player state to the end of the player interaction trajectory (ending state) that makes the state a valid training data poing for score prediction
     ]]
 
 -- threads and default tensor type
