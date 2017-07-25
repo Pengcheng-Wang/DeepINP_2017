@@ -794,7 +794,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
             end
 
             tltCnt = tltCnt + 1
-            self.userActScorePred:forget()
+            self.model:forget()
         end
 
         -- return a table, with [1] being action pred accuracy, [2] being reward pred accuracy
