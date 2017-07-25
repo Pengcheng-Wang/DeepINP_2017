@@ -629,7 +629,7 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
             tltCnt = tltCnt + 1
         end
     end
---    print('On test set, Act Pred accuracy is ', crcActCnt/tltCnt)
+    print('###On test set, Act Pred accuracy is ', crcActCnt/tltCnt)
     return crcActCnt/tltCnt
 end
 
