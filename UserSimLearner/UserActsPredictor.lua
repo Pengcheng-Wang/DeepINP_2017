@@ -554,8 +554,8 @@ function CIUserActsPredictor:trainOneEpoch()
 
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
         local testAccu = self:testActPredOnTestDetOneEpoch()
-        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', testAccu*100))
-        self.uapTestLogger:add{self.trainEpoch, testAccu*100 }
+        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f', testAccu*100))
+        self.uapTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f', testAccu*100)}
     end
 
     self.uapConfusion:zero()

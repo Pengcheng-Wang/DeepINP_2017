@@ -616,8 +616,8 @@ function CIUserScorePredictor:trainOneEpoch()
 
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
         local scoreTestAccu = self:testScorePredOnTestDetOneEpoch()
-        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', scoreTestAccu*100))
-        self.uspTestLogger:add{self.trainEpoch, scoreTestAccu*100}
+        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f', scoreTestAccu*100))
+        self.uspTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f', scoreTestAccu*100)}
     end
 
     self.uspConfusion:zero()
@@ -635,7 +635,6 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         self.model:forget()
         for i=1, #self.rnnRealUserDataStatesTest do
             local userState = self.rnnRealUserDataStatesTest[i]
-            local userAct = self.rnnRealUserDataActsTest[i]
             local userRew = self.rnnRealUserDataRewardsTest[i]
 
             local tabState = {}
@@ -644,7 +643,7 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
                 prepUserState[1] = self.ciUserSimulator:preprocessUserStateData(userState[j], self.opt.prepro)
                 tabState[j] = prepUserState:clone()
             end
-            if userAct[self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
+            if TableSet.tableContainsValue(self.rnnRealUserDataEndsTest, i) then
                 local nll_rewards = self.model:forward(tabState)
                 local lp, rin = torch.max(nll_rewards[self.opt.lstmHist]:squeeze(), 1)
                 if rin[1] == userRew[self.opt.lstmHist] then

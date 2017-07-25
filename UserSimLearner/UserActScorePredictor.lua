@@ -742,9 +742,9 @@ function CIUserActScorePredictor:trainOneEpoch()
 
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
         local actScoreTestAccu = self:testActScorePredOnTestDetOneEpoch()
-        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', actScoreTestAccu[1]*100))
-        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%d', actScoreTestAccu[2]*100))
-        self.uaspTestLogger:add{self.trainEpoch, actScoreTestAccu[1]*100, actScoreTestAccu[2]*100}
+        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f', actScoreTestAccu[1]*100))
+        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f', actScoreTestAccu[2]*100))
+        self.uaspTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f', actScoreTestAccu[1]*100), string.format('%.5f', actScoreTestAccu[2]*100)}
     end
 
     self.uapConfusion:zero()
