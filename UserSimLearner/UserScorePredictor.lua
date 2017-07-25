@@ -616,8 +616,8 @@ function CIUserScorePredictor:trainOneEpoch()
 
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
         local scoreTestAccu = self:testScorePredOnTestDetOneEpoch()
-        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f', scoreTestAccu*100))
-        self.uspTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f', scoreTestAccu*100)}
+        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', scoreTestAccu*100))
+        self.uspTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', scoreTestAccu*100)}
     end
 
     self.uspConfusion:zero()
