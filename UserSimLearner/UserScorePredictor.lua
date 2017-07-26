@@ -604,13 +604,10 @@ function CIUserScorePredictor:trainOneEpoch()
 --        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
 --    end
 
-    if self.trainEpoch % 10 == 0 then
+    if self.trainEpoch % 10 == 0 and self.opt.ciuTType == 'train' then
         filename = paths.concat(self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'usp.t7')
         os.execute('mkdir -p ' .. sys.dirname(filename))
         print('<trainer> saving periodly trained ciunet to '..filename)
-        torch.save(filename, self.model)
-    else
-        print('<trainer> saving ciunet to '..filename)
         torch.save(filename, self.model)
     end
 
