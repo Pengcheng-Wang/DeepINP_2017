@@ -129,9 +129,9 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
                 self.model:add(nn.NormStabilizer())
             end
             if opt.lstmHdL2 == 0 then
-                self.model:add(nn.Linear(opt.lstmHd, #self.classes))
+                self.model:add(nn.Linear(opt.lstmHd, #classes))
             else
-                self.model:add(nn.Linear(opt.lstmHdL2, #self.classes))
+                self.model:add(nn.Linear(opt.lstmHdL2, #classes))
             end
 
             self.model:add(nn.LogSoftMax())
