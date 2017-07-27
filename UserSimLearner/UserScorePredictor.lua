@@ -109,10 +109,10 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             local lstm
             if opt.uSimGru == 0 then
                 lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
             else
                 lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)
             end
-            lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
             lstm:remember('both')
             self.model:add(lstm)
             self.model:add(nn.NormStabilizer())
