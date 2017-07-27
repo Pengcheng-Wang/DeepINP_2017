@@ -149,20 +149,44 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
             nn.FastLSTM.bn = true
-            local lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-            lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
+            local lstm
+            if opt.uSimGru == 0 then
+                lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
+            else
+                lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)
+            end
             lstm:remember('both')
             self.model:add(lstm)
             self.model:add(nn.NormStabilizer())
+            -- if need a 2nd lstm layer
+            if opt.lstmHdL2 ~= 0 then
+                local lstmL2
+                if opt.uSimGru == 0 then
+                    lstmL2 = nn.FastLSTM(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                    lstmL2.i2g:init({'bias', {{3*opt.lstmHdL2+1, 4*opt.lstmHdL2}}}, nninit.constant, 1)
+                else
+                    lstmL2 = nn.GRU(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)
+                end
+                lstmL2:remember('both')
+                self.model:add(lstmL2)
+                self.model:add(nn.NormStabilizer())
+            end
+            local lastHidNum
+            if opt.lstmHdL2 == 0 then
+                lastHidNum = opt.lstmHd
+            else
+                lastHidNum = opt.lstmHdL2
+            end
 
             -- The following code creates two output modules, with one module matches
             -- to user action prediction, and the other matches to user outcome(score) prediction
             mulOutConcatTab = nn.ConcatTable()
             actSeqNN = nn.Sequential()
-            actSeqNN:add(nn.Linear(opt.lstmHd, #classesActs))
+            actSeqNN:add(nn.Linear(lastHidNum, #classesActs))
             actSeqNN:add(nn.LogSoftMax())
             scoreSeqNN = nn.Sequential()
-            scoreSeqNN:add(nn.Linear(opt.lstmHd, #classesScores))
+            scoreSeqNN:add(nn.Linear(lastHidNum, #classesScores))
             scoreSeqNN:add(nn.LogSoftMax())
             mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
             mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
