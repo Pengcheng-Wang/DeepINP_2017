@@ -111,7 +111,19 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             lstm:remember('both')
             self.model:add(lstm)
             self.model:add(nn.NormStabilizer())
-            self.model:add(nn.Linear(opt.lstmHd, #self.classes))
+            if opt.lstmHdL2 ~= 0 then
+                local lstmL2 = nn.FastLSTM(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                lstmL2.i2g:init({'bias', {{3*opt.lstmHdL2+1, 4*opt.lstmHdL2}}}, nninit.constant, 1)
+                lstmL2:remember('both')
+                self.model:add(lstmL2)
+                self.model:add(nn.NormStabilizer())
+            end
+            if opt.lstmHdL2 == 0 then
+                self.model:add(nn.Linear(opt.lstmHd, #self.classes))
+            else
+                self.model:add(nn.Linear(opt.lstmHdL2, #self.classes))
+            end
+
             self.model:add(nn.LogSoftMax())
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
