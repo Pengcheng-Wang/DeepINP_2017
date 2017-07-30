@@ -176,6 +176,9 @@ function Setup:parseOptions(arg)
   cmd:option('-save', 'upplogs', 'subdirectory to save logs')
   cmd:option('-ciuTType', 'train', 'tell userSimulator which part of corpus to use')
   cmd:option('-uSimShLayer', 0, 'Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers')
+  cmd:option('-testSetDivSeed', 2, 'The default seed value when separating a test set from the dataset')
+  cmd:option('-validSetDivSeed', 3, 'The default seed value when separating a validation set out from the training set')
+  
 
   local opt = cmd:parse(arg)
 
