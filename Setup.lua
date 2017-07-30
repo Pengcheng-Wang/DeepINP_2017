@@ -171,6 +171,8 @@ function Setup:parseOptions(arg)
   cmd:option('-lstmHist', 10, 'lstm history length used for uap and usp')
   cmd:option('-uSimLstmBackLen', 3, 'The maximum step applied in btpp in lstm')
   cmd:option('-lstmHd', 64, 'lstm hidden layer size')
+  cmd:option('-lstmHdL2', 0, 'LSTM hidden layer size in 2nd lstm layer')
+  cmd:option('-uSimGru', 0, 'Whether to substitue lstm with gru (0 for using lstm, 1 for GRU)')
   cmd:option('-actDistT', 100, 'The temperature hyper-param used in softmax of importance sampling')
   cmd:option('-ciunet', '', 'the pretrained network for user acts/scores predictor, should not be used')
   cmd:option('-save', 'upplogs', 'subdirectory to save logs')
@@ -178,7 +180,7 @@ function Setup:parseOptions(arg)
   cmd:option('-uSimShLayer', 0, 'Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers')
   cmd:option('-testSetDivSeed', 2, 'The default seed value when separating a test set from the dataset')
   cmd:option('-validSetDivSeed', 3, 'The default seed value when separating a validation set out from the training set')
-
+  
 
   local opt = cmd:parse(arg)
 
