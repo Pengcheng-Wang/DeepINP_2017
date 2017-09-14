@@ -136,7 +136,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
                     self.realUserRLTypes[userId] = nil
                 end
             else
-                -- set the next time step state set
+                -- set the next time step state vector
                 self.realUserDataStates[#self.realUserDataStates + 1] = self.realUserDataStates[#self.realUserDataStates]:clone()
 
                 if act == CIFileReader.usrActInd_askTeresaSymp then
@@ -504,9 +504,9 @@ end
 
 
 --- Apply user action on state representation
---  Attention: isAdpTriggered() should be called
---  before this function. (Verification of adaptation should be before applying user action's effect)
---  Attention: This act param is user's action, not RL agent's adp action
+--- Attention: isAdpTriggered() should be called
+--- before this function. (Verification of adaptation should be before applying user action's effect)
+--- Attention: This act param is user's action, not RL agent's adp action
 function CIUserSimulator:applyUserActOnState(curState, userAct)
     -- curState should be a 1d or 2d tensor. If it is
     -- 2d, I assume the 1st dim is batch dimension
