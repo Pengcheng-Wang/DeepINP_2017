@@ -37,10 +37,10 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
     classesActs = {}
     classesScores = {}
     for i=1, CIUserSimulator.CIFr.usrActInd_end do classesActs[i] = i end   -- set action classes
-    for i=1,2 do classesScores[i] = i end   -- set score(outcome) classes
-    self.inputFeatureNum = CIUserSimulator.realUserDataStates[1]:size()[1]
+    for i=1,2 do classesScores[i] = i end   -- set score(outcome) classes. When NLG is the metric, label 1 means pos NLG, label 2 means neg NLG
+    self.inputFeatureNum = CIUserSimulator.realUserDataStates[1]:size()[1]  -- should be 18+3 now
 
-    if opt.ciunet == '' then
+    if opt.ciunet == '' then    -- ciunet is the CIUserActScorePredictor model to be loaded from file
         -- define model to train
         self.model = nn.Sequential()
 
@@ -148,13 +148,14 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             -- lstm
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
-            nn.FastLSTM.bn = true
+            nn.FastLSTM.bn = true   -- turn on batch normalization
             local lstm
             if opt.uSimGru == 0 then
                 lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
+                lstm.i2g:init({'bias', {{2*opt.lstmHd+1, 3*opt.lstmHd}}}, nninit.constant, 1)   -- Fixed a bug here. Here we want initially set forget gate biases to 1.
+                -- has not applied batch normalization for fastLSTM before, should try it.
             else
-                lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)
+                lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)   -- did not apply dropout or batchNormalization for GRU before
             end
             lstm:remember('both')
             self.model:add(lstm)
@@ -164,9 +165,10 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 local lstmL2
                 if opt.uSimGru == 0 then
                     lstmL2 = nn.FastLSTM(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                    lstmL2.i2g:init({'bias', {{3*opt.lstmHdL2+1, 4*opt.lstmHdL2}}}, nninit.constant, 1)
+                    lstmL2.i2g:init({'bias', {{2*opt.lstmHdL2+1, 3*opt.lstmHdL2}}}, nninit.constant, 1)     -- Fixed a bug here. Here we want initially set forget gate biases to 1.
+                    -- has not applied batch normalization for fastLSTM before, should try it.
                 else
-                    lstmL2 = nn.GRU(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)
+                    lstmL2 = nn.GRU(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)     -- did not apply dropout or batchNormalization for GRU before
                 end
                 lstmL2:remember('both')
                 self.model:add(lstmL2)
@@ -204,7 +206,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
         -- params init
         local uapLinearLayers = self.model:findModules('nn.Linear')
         for l = 1, #uapLinearLayers do
-            uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
+            uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})    -- This bias initialization seems a little bit conflict with FastLSTM forget gate bias init.
         end
     else
         print('<trainer> reloading previously trained ciunet')
