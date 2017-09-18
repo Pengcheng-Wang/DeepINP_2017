@@ -172,7 +172,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 end
                 lstmL2:remember('both')
                 self.model:add(lstmL2)
-                self.model:add(nn.NormStabilizer())
+                self.model:add(nn.NormStabilizer()) -- I am not very clear if NormStabilizer should be used togeher with Dropout, especially since dropout is used on memory value, equals to change memory value distribution a little
             end
             local lastHidNum
             if opt.lstmHdL2 == 0 then
@@ -194,7 +194,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
 
             self.model:add(mulOutConcatTab)
-            self.model = nn.Sequencer(self.model)
+            self.model = nn.Sequencer(self.model)   -- This is interesting! This allows input to be a sequence of observations. We can also put FastLSTM into a Sequencer to substitue SeqLSTM, since SeqLSTM does not use RNN_dropout (Gal 16)
             ------------------------------------------------------------
 
         else
