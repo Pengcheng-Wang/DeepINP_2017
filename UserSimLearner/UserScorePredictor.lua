@@ -10,7 +10,7 @@
 
 require 'torch'
 require 'nn'
-require 'nnx'
+require 'nnx'   -- might be unnecessary right now
 require 'optim'
 require 'rnn'
 local nninit = require 'nninit'
@@ -32,7 +32,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     self.opt = opt
     ----------------------------------------------------------------------
     -- define model to train
-    -- on the 15-class classification problem
+    -- on the 2-class (player outcomes with high/low performance) classification problem
     --
     self.classes = {}
     for i=1,2 do self.classes[i] = i end
@@ -73,7 +73,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             trunk:add(experts)
 
             self.model:add(trunk)
-            self.model:add(nn.MixtureTable())
+            self.model:add(nn.MixtureTable())   -- {gater, experts} is the form of input for MixtureTable. So, gater output should be the 1st in the output table
             ------------------------------------------------------------
 
         elseif opt.uppModel == 'mlp' then
@@ -109,7 +109,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             local lstm
             if opt.uSimGru == 0 then
                 lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                lstm.i2g:init({'bias', {{3*opt.lstmHd+1, 4*opt.lstmHd}}}, nninit.constant, 1)
+                lstm.i2g:init({'bias', {{2*opt.lstmHd+1, 3*opt.lstmHd}}}, nninit.constant, 1)   -- Fixed a bug here. Here we want initially set forget gate biases to 1.
             else
                 lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)
             end
@@ -121,7 +121,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
                 local lstmL2
                 if opt.uSimGru == 0 then
                     lstmL2 = nn.FastLSTM(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                    lstmL2.i2g:init({'bias', {{3*opt.lstmHdL2+1, 4*opt.lstmHdL2}}}, nninit.constant, 1)
+                    lstmL2.i2g:init({'bias', {{2*opt.lstmHdL2+1, 3*opt.lstmHdL2}}}, nninit.constant, 1) -- Fixed a bug here. Here we want initially set forget gate biases to 1.
                 else
                     lstmL2 = nn.GRU(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)
                 end
@@ -136,7 +136,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             end
 
             self.model:add(nn.LogSoftMax())
-            self.model = nn.Sequencer(self.model)
+            self.model = nn.Sequencer(self.model)   -- In this way, we can construct input using mini-batches, which contains sequences from a time period
             ------------------------------------------------------------
 
         else

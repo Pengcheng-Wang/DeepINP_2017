@@ -206,7 +206,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
         -- params init
         local uapLinearLayers = self.model:findModules('nn.Linear')
         for l = 1, #uapLinearLayers do
-            uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})    -- This bias initialization seems a little bit conflict with FastLSTM forget gate bias init.
+            uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})    -- This bias initialization seems a little bit conflict with FastLSTM forget gate bias init. Maybe not, bcz it's on linear modules.
         end
     else
         print('<trainer> reloading previously trained ciunet')
