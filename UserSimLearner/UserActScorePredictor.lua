@@ -804,7 +804,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
                 tabState[j] = prepUserState:clone()
             end
 
-            local nll_acts = self.model:forward(tabState)
+            local nll_acts = self.model:forward(tabState)   -- Here can be a problem for calling forward without considering GPU models. Not sure yet
             local lp, ain = torch.max(nll_acts[self.opt.lstmHist][1]:squeeze(), 1)     -- then 2nd [1] index is for action prediction from the shared act/score prediction outcome
 
             -- update action prediction confusion matrix
@@ -837,7 +837,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
             local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
             prepUserState[1] = userState:clone()
 
-            local nll_acts = self.model:forward(prepUserState)
+            local nll_acts = self.model:forward(prepUserState)  -- Here can be a problem for calling forward without considering GPU models. Not sure yet
 
             -- Here, if moe is used with shared lower layers, it is the problem that,
             -- due to limitation of MixtureTable module, we have to join tables together as

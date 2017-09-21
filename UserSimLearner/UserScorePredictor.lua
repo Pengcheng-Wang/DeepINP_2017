@@ -665,7 +665,7 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
                 tabState[j] = prepUserState:clone()
             end
             if TableSet.tableContainsValue(self.rnnRealUserDataEndsTest, i) then
-                local nll_rewards = self.model:forward(tabState)
+                local nll_rewards = self.model:forward(tabState)    -- Haven't considered GPU model here, so might be a problem
                 local lp, rin = torch.max(nll_rewards[self.opt.lstmHist]:squeeze(), 1)
                 if rin[1] == userRew[self.opt.lstmHist] then
                     crcRewCnt = crcRewCnt + 1
@@ -687,7 +687,7 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
             prepUserState[1] = userState:clone()
 
             if userAct == self.ciUserSimulator.CIFr.usrActInd_end then
-                local nll_rewards = self.model:forward(prepUserState)
+                local nll_rewards = self.model:forward(prepUserState)   -- Haven't consider GPU model, might be a problem
                 local lp, rin = torch.max(nll_rewards[1]:squeeze(), 1)
                 if rin[1] == userRew then
                     crcRewCnt = crcRewCnt + 1

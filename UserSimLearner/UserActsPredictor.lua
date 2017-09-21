@@ -613,7 +613,7 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
                 tabState[j] = prepUserState:clone()
             end
 
-            local nll_acts = self.model:forward(tabState)
+            local nll_acts = self.model:forward(tabState)   -- Here can be a problem for calling forward without considering GPU models. Not sure yet
             local lp, ain = torch.max(nll_acts[self.opt.lstmHist]:squeeze(), 1)
 
             -- update action prediction confusion matrix
@@ -638,7 +638,7 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
             local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
             prepUserState[1] = userState:clone()
 
-            local nll_acts = self.model:forward(prepUserState)
+            local nll_acts = self.model:forward(prepUserState)      -- Here can be a problem for calling forward without considering GPU models. Not sure yet
             local lp, ain = torch.max(nll_acts[1]:squeeze(), 1)
 
             -- update action prediction confusion matrix
