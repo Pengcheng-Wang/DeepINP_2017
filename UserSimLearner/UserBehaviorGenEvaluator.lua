@@ -11,7 +11,7 @@ require 'nn'
 local _ = require 'moses'
 local class = require 'classic'
 require 'classic.torch' -- Enables serialisation
-local TableSet = require 'MyMisc.TableSetMisc'
+local TableSet = require 'MyMisc.TableSetMisc'  -- not used right now
 
 local CIUserBehaviorGenEvaluator = classic.class('UserBehaviorGenEvaluator')
 
@@ -39,7 +39,7 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
     if opt.uSimShLayer < 1 then
 
         -- Bipartitle Act/Score prediction model
-        -- The user action/score predictors for evaluation should be pre-trained, and loaded from files
+        -- The user action/score predictors for evaluation should be already trained, and loaded from files
         -- Also, the CIUserSimulator, CIUserActsPred, CIUserScorePred should be initialized using
         -- the test set.
         print('User Act Score Bipartitle model: #', paths.concat(opt.ubgDir , opt.uapFile),
