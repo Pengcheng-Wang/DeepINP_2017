@@ -397,5 +397,16 @@ function CIUserBehaviorGenEvaluator:_actionDistributionCalc(CIUserSimulator, cnt
     print('Act count at time step ', countScope+1, ' is:', st)
 end
 
+--- Get stats for the over all user action distribution
+function CIUserBehaviorGenEvaluator:userActionDistStats(CIUserSimulator)
+    local st = torch.Tensor(CIUserSimulator.CIFr.usrActInd_end):fill(0)     -- tensor dim is 15 (user action types)
+    for k, v in ipairs(CIUserSimulator.realUserDataActs) do
+        st[v] = st[v] +1 -- check act dist at each x-th time step
+    end
+    local uaSum = st:sum()
+    local adist = st:div(uaSum)
+    print('User action distribution:\n', 'Total action counts: ', uaSum, '\nAct counts: ', st, '\n dist: ', adist)
+end
+
 return CIUserBehaviorGenEvaluator
 
