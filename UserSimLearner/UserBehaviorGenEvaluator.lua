@@ -406,7 +406,7 @@ function CIUserBehaviorGenEvaluator:userActionDistStats(CIUserSimulator)
         st[v] = st[v] +1 -- check act dist at each x-th time step
     end
     local uaSum = st:sum()
-    local adist = st:div(uaSum)
+    local adist = torch.div(st, uaSum)
     print('User action distribution:\n', 'Total action counts: ', uaSum, '\nAct counts: ', st, '\n dist: ', adist)
 end
 
