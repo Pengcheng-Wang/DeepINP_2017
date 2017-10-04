@@ -36,7 +36,7 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
 
     local countScope=0  -- This param is used to calculate action distribution at countScope time step
 
-    self.userActionDistStats(CIUserSimulator)
+    self:userActionDistStats(CIUserSimulator)
 
     if opt.uSimShLayer < 1 then
 
