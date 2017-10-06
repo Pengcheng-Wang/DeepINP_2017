@@ -109,9 +109,9 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             local lstm
             if opt.uSimGru == 0 then
                 lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                lstm.i2g:init({'bias', {{2*opt.lstmHd+1, 3*opt.lstmHd}}}, nninit.constant, 1)   -- Fixed a bug here. Here we want initially set forget gate biases to 1.
                 print(lstm.i2g, type(lstm.i2g), lstm.i2g['bias'])   -- for test purpose
                 os.exit()
+                lstm.i2g:init({'bias', {{2*opt.lstmHd+1, 3*opt.lstmHd}}}, nninit.constant, 1)   -- Fixed a bug here. Here we want initially set forget gate biases to 1.
             else
                 lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)
             end
