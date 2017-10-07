@@ -136,6 +136,8 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
                 --    }
                 --    (3): nn.JoinTable
                 --}
+                -- This is true when p>0 (dropout rate)
+                -- When p==0, the structure is the same as before
                 --print(lstm.i2g, lstm.i2g.modules[2].modules[3])
                 --lstm.i2g.modules[2].modules[3]:init('bias', nninit.constant, 1)   -- Fixed a bug here. Here we want initially set forget gate biases to 1.
                 lstm.i2g:init({'bias', {{2*opt.lstmHd+1, 3*opt.lstmHd}}}, nninit.constant, 1)   -- Fixed a bug here. Here we want initially set forget gate biases to 1.
